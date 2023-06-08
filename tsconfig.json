@@ -1,0 +1,38 @@
+// {
+//   "compilerOptions": {
+//     "sourceMap": true,
+//     "outDir": "./dist",
+//     "rootDir": "./src",
+//     "strict": true,
+//     "moduleResolution": "node",
+//     "forceConsistentCasingInFileNames": true,
+//     "skipLibCheck": true,
+//     "lib": ["esnext"],
+//     "esModuleInterop": true,
+//     "declaration": true,
+//     "baseUrl": "src",
+//     "paths": {
+//       "@config": ["config/index.ts"],
+//       "@controllers": ["api/v1/controllers/index.ts"],
+//       "@interfaces": ["api/v1/interfaces/index.ts"],
+//       "@loaders": ["/src/api/v1/loaders/index.ts"],
+//       "@repositories": ["api/v1/repositories/index.ts"],
+//       "@routes": ["api/v1/routes/index.ts"],
+//       "@services": ["api/v1/services/index.ts"],
+//       "@utils": ["apiv1/utils/index.ts"]
+//     }
+//   },
+//   "include": ["src/**/*.ts"]
+// }
+{
+  "compilerOptions": {
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": false,
+    "lib": ["esnext"],
+    "esModuleInterop": true,
+    "declaration": true
+  },
+  "include": ["src/**/*.ts"]
+}
