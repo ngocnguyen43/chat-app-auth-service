@@ -34,5 +34,6 @@
     "esModuleInterop": true,
     "declaration": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "files": ["./src/index.d.ts"]
 }

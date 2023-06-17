@@ -1,6 +1,7 @@
 import prisma from '../config';
+import { RegistrationDto } from '@v1/interface';
 
-export class userRepository {
+export default class UserRepository {
   public static async findOneById(id: string) {
     const user = await prisma.users.findFirst({
       where: {
@@ -16,5 +17,14 @@ export class userRepository {
       },
     });
     return user ?? null;
+  }
+  public static async createOne(user: RegistrationDto) {
+    await prisma.users.create({
+      data: {
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      },
+    });
   }
 }
