@@ -10,16 +10,31 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Options {
+  password
+  passkey
+  otp
+}
+
 model Users {
-  id         String      @id @unique @default(uuid())
-  firstName  String      @map("first_name")
-  lastName   String      @map("last_name")
-  email      String      @unique @db.VarChar(100)
-  password   String?     @db.VarChar(255)
+  id         String         @id @unique @default(cuid()) @map("user_id")
+  firstName  String         @map("first_name")
+  lastName   String         @map("last_name")
+  email      String         @unique @db.VarChar(100)
+  password   String?        @db.VarChar(255)
   avatar     String?
-  createdAt  DateTime    @default(now()) @map("created_at")
-  updatedAt  DateTime    @updatedAt @map("updated_at")
-  GroupUsers GroupUsers? @relation(fields: [id], references: [id], onDelete: Cascade)
+  createdAt  DateTime       @default(now()) @map("created_at")
+  updatedAt  DateTime       @updatedAt @map("updated_at")
+  GroupUsers GroupUsers?    @relation(fields: [id], references: [id], onDelete: Cascade)
+  AuthOtions AuthnOptions[]
+}
+
+model AuthnOptions {
+  id     String  @id @unique @default(cuid()) @map("option_id")
+  userId String  @map("user_id")
+  Users  Users?  @relation(fields: [userId], references: [id])
+  option Options
+  value  Json
 }
 
 model GroupUsers {
@@ -31,7 +46,7 @@ model GroupUsers {
 }
 
 model Group {
-  id           String        @id @unique @db.VarChar(36)
+  id           String        @id @unique @default(uuid())
   creator      String        @db.VarChar(36)
   createdAt    DateTime      @default(now()) @db.DateTime(0)
   GroupUsers   GroupUsers[]
@@ -39,7 +54,7 @@ model Group {
 }
 
 model Conversation {
-  id            String    @id @unique @db.VarChar(36)
+  id            String    @id @unique @default(uuid())
   groupId       String    @unique @map("group_id") @db.VarChar(36)
   Group         Group     @relation(fields: [groupId], references: [id])
   lastMessage   String?   @db.Text
@@ -51,7 +66,7 @@ model Conversation {
 model Message {
   id             Int          @id @default(autoincrement())
   conversationId String       @db.VarChar(36)
-  from           String       @db.VarChar(36)
+  from           String       @db.VarChar(32)
   message        String       @db.Text
   createdAt      DateTime     @default(now()) @db.DateTime(0)
   Conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
