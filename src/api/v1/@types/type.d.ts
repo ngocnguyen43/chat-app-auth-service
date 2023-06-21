@@ -18,4 +18,10 @@ declare module '@v1/interface' {
     getMessage(): string;
     getStatus(): number;
   }
+  interface userGoogleLoginDto {
+    email: string;
+    email_verified: boolean;
+    family_name: string;
+    given_name: string;
+  }
 }

@@ -14,6 +14,7 @@ enum Options {
   password
   passkey
   otp
+  oauth
 }
 
 model User {

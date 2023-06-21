@@ -34,9 +34,9 @@
     "esModuleInterop": true,
     "declaration": true,
     "moduleResolution": "node",
-    "isolatedModules": true,
+    // "isolatedModules": true,
     "skipLibCheck": true
   },
   "include": ["src/**/*.d.ts", "src/**/*.ts"],
-  "files": ["./src/index.d.ts", "./src/api/v1/interfaces/type.d.ts"]
+  "files": ["./src/index.d.ts", "src/api/v1/@types/type.d.ts"]
 }
