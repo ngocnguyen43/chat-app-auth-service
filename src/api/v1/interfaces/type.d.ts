@@ -14,4 +14,8 @@ declare module '@v1/interface' {
     getErr(): string;
     getStatusCode(): number;
   }
+  interface Response {
+    getMessage(): string;
+    getStatus(): number;
+  }
 }
