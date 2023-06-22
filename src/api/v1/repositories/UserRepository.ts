@@ -41,19 +41,21 @@ export default class UserRepository {
     const userFound = await this.findOneByEmail(user.email);
     console.log(userFound);
 
-    if (userFound) throw new UserAlreadyExists();
-    execute.push(
-      prisma.user.create({
-        data: {
-          email: user.email,
-          firstName: user.family_name,
-          lastName: user.given_name,
-        },
-      }),
-    );
-    const [res] = await prisma.$transaction(execute, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
-    return res;
+    if (!userFound) {
+      execute.push(
+        prisma.user.create({
+          data: {
+            email: user.email,
+            firstName: user.family_name,
+            lastName: user.given_name,
+          },
+        }),
+      );
+      const [res] = await prisma.$transaction(execute, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      });
+      return res;
+    }
+    return userFound;
   };
 }
