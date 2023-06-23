@@ -115,15 +115,15 @@ export default class AuthService {
     return regOptions;
   };
   public static WebAuthnRegistrationVerification = async (credential: any) => {
-    console.log(credential);
     try {
       const user = await UserRepository.findOneByEmail(credential['user']['email']);
       const auth = await AuthOptionsRepository.FindOneByUserId(user.id, 'passkey');
-      const data = credential['data'];
+      const data = credential['loginRes'];
+      console.log(data);
       const expectedChallenge = user.currentChallenge;
       let verification: VerifiedRegistrationResponse;
-      const options: VerifyRegistrationResponseOpts = {
-        response: credential['data'],
+      const options = {
+        response: data,
         expectedChallenge: `${expectedChallenge}`,
         expectedOrigin: 'http://localhost:5173',
         expectedRPID: 'localhost',
@@ -133,7 +133,7 @@ export default class AuthService {
       const { verified, registrationInfo } = verification;
       if (verified && registrationInfo) {
         const { credentialPublicKey, credentialID, counter } = registrationInfo;
-        const existingDevice = auth.key['devices']
+        const existingDevice = auth
           ? (auth.key['devices'] as []).find((device: any) =>
               Buffer.from(device.credentialID.data).equals(credentialID),
             )
@@ -145,7 +145,8 @@ export default class AuthService {
             counter,
             transports: data.response.transports,
           };
-          await AuthOptionsRepository.AddDevice(auth.id, user.id, newDevice);
+          await AuthOptionsRepository.CreateDevice(user.id, newDevice);
+          console.log(newDevice);
         }
       }
       return { ok: true };

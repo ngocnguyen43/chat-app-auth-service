@@ -190,4 +190,28 @@ export default class AuthOptionsRepository {
       throw new Unexpected();
     }
   };
+  public static CreateDevice = async (userId: string, device: any) => {
+    try {
+      const execute: string | any[] = [];
+      const json = {
+        devices: [device],
+        webauthn: true,
+      };
+      execute.push(
+        prisma.authnOptions.create({
+          data: {
+            option: 'passkey',
+            userId: userId,
+            key: json,
+          },
+        }),
+      );
+      if (execute.length > 0) {
+        await prisma.$transaction(execute);
+      }
+    } catch (error) {
+      console.log(error);
+      throw new Unexpected();
+    }
+  };
 }
