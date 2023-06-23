@@ -1,24 +1,24 @@
 declare module '@v1/interface' {
-  interface LogInDto {
+  export interface LogInDto {
     email: string;
     password: string;
   }
-  interface RegistrationDto {
+  export interface RegistrationDto {
     firstName: string;
     lastName: string;
     email: string;
     password?: string;
     avatar?: string;
   }
-  interface BaseException {
+  export interface BaseException {
     getErr(): string;
     getStatusCode(): number;
   }
-  interface Response {
+  export interface Response {
     getMessage(): string;
     getStatus(): number;
   }
-  interface userGoogleLoginDto {
+  export interface userGoogleLoginDto {
     email: string;
     email_verified: boolean;
     family_name: string;

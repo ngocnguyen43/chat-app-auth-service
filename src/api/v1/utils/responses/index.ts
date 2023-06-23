@@ -9,3 +9,12 @@ export class CREATED implements Response {
     return this.message;
   }
 }
+export class Authenticated implements Response {
+  constructor() {}
+  getMessage(): string {
+    throw new Error('Method not implemented.');
+  }
+  getStatus(): number {
+    throw new Error('Method not implemented.');
+  }
+}

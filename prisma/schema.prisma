@@ -18,14 +18,15 @@ enum Options {
 }
 
 model User {
-  id         String         @id @unique @default(uuid()) @map("user_id")
-  firstName  String         @map("first_name")
-  lastName   String         @map("last_name")
-  email      String         @unique @db.VarChar(100)
-  avatar     String?
-  createdAt  DateTime       @default(now()) @map("created_at")
-  updatedAt  DateTime       @updatedAt @map("updated_at")
-  AuthOtions AuthnOptions[]
+  id               String         @id @unique @default(uuid()) @map("user_id")
+  firstName        String         @map("first_name")
+  lastName         String         @map("last_name")
+  email            String         @unique @db.VarChar(100)
+  currentChallenge String?        @map("current_challenge")
+  avatar           String?
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  AuthOtions       AuthnOptions[]
 
   @@index([email, id])
   @@map("users")

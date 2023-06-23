@@ -20,30 +20,29 @@ export default class AuthOptionsRepository {
     );
     await prisma.$transaction(execute);
   }
-  private static async ContainsValue(value: OAuthType) {
-    const oAuth = prisma.authnOptions.findMany({
+  public static async FindOneWithKeyValue(userId: string, value: OAuthType, type: 'oauth' | 'otp') {
+    const oAuth = await prisma.authnOptions.findFirst({
       where: {
-        key: {
-          path: '$[*].value',
-          array_contains: value,
-        },
+        userId: userId,
+        option: type,
       },
     });
+    console.log(oAuth);
     return oAuth ?? null;
   }
-  public static async FindOneByUserId(userId: string) {
+  public static FindOneByUserId = async (userId: string, type: 'oauth' | 'passkey' | 'password' | 'otp') => {
     const option = await prisma.authnOptions.findFirst({
       where: {
         userId: userId,
-        option: 'oauth',
+        option: type,
       },
     });
     return option ?? null;
-  }
-  public static async AddEmail(userId: string, email: string) {
+  };
+  public static async AddEmail(userId: string, email: string, aud?: string) {
     const execute: string | any[] = [];
     try {
-      const option = await this.FindOneByUserId(userId);
+      const option = await this.FindOneByUserId(userId, 'oauth');
       console.log(option);
 
       if (!option) {
@@ -53,7 +52,7 @@ export default class AuthOptionsRepository {
               google: email,
             },
           ],
-          federated: [{ google: process.env.GOOGLE_CLIENT_ID }],
+          federated: [{ google: aud || process.env.GOOGLE_CLIENT_ID }],
         } as Prisma.JsonObject;
         execute.push(
           prisma.authnOptions.create({
@@ -65,7 +64,7 @@ export default class AuthOptionsRepository {
           }),
         );
       } else {
-        if (option.key['value'] && !this.ContainsValue('google')) {
+        if (option.key['value'] && !this.FindOneWithKeyValue(userId, 'google', 'oauth')) {
           const key = option.key as Prisma.JsonObject;
           if (key['value'] && key['federated']) {
             const value = key['value'] as Prisma.JsonArray;
@@ -73,7 +72,7 @@ export default class AuthOptionsRepository {
             const json = {
               ...key,
               value: [...value, { google: email }],
-              federated: [...federated, { gooel: process.env.GOOGLE_CLIENT_ID }],
+              federated: [...federated, { google: aud || process.env.GOOGLE_CLIENT_ID }],
             } as Prisma.JsonObject;
             const whereClause = Prisma.validator<Prisma.AuthnOptionsWhereInput>()({
               id: option.id,
@@ -132,6 +131,60 @@ export default class AuthOptionsRepository {
         return { ok: 'ok' };
       }
       return { ok: 'not ok' };
+    } catch (error) {
+      console.log(error);
+      throw new Unexpected();
+    }
+  };
+  public static AddChallenge = async (userId: string, challenge: string) => {
+    try {
+      const execute: string | any[] = [];
+      execute.push(
+        prisma.user.update({
+          where: {
+            id: userId,
+          },
+          data: {
+            currentChallenge: challenge,
+          },
+        }),
+      );
+      if (execute.length > 0) {
+        await prisma.$transaction(execute);
+      }
+    } catch (error) {
+      console.log(error);
+      throw new Unexpected();
+    }
+  };
+  public static AddDevice = async (id: string, userId: string, device: any) => {
+    try {
+      const execute: string | any[] = [];
+      const data =
+        (await prisma.authnOptions.findFirst({
+          where: {
+            userId: userId,
+            option: 'passkey',
+          },
+        })) ?? {};
+      const json = {
+        ...data,
+        devices: [...data['devices'], device],
+        webauthn: true,
+      };
+      execute.push(
+        prisma.authnOptions.update({
+          where: {
+            id: id,
+          },
+          data: {
+            key: json,
+          },
+        }),
+      );
+      if (execute.length > 0) {
+        await prisma.$transaction(execute);
+      }
     } catch (error) {
       console.log(error);
       throw new Unexpected();

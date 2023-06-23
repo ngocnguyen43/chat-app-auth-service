@@ -9,10 +9,19 @@ export default class AuthController {
   public static loginWithGoole = async (req: Request, res: Response, next: NextFunction) => {
     return res.status(200).json(await AuthService.GooglePopupLogin(req.body as userGoogleLoginDto));
   };
+  public static loginWithIDGoole = async (req: Request, res: Response, next: NextFunction) => {
+    return res.status(200).json(await AuthService.GoogleIdLogin(req.body.credential as string));
+  };
   public static LoginOptions = async (req: Request, res: Response, next: NextFunction) => {
-    return res.status(200).json(await AuthService.LoginOptions(req.body.email as string));
+    return res.status(200).json(await AuthService.OptionsLogin(req.body.email as string));
   };
   public static LoginPassword = async (req: Request, res: Response, next: NextFunction) => {
-    return res.status(200).json(await AuthService.LoginPassword(req.body as LogInDto));
+    return res.status(200).json(await AuthService.PasswordLogin(req.body as LogInDto));
+  };
+  public static WebAuthnRegistrationOptions = async (req: Request, res: Response, next: NextFunction) => {
+    return res.status(200).json(await AuthService.WebAuthnRegistrationOptions(req.body.email as string));
+  };
+  public static WebAuthnRegistrationVerification = async (req: Request, res: Response, next: NextFunction) => {
+    return res.status(200).json(await AuthService.WebAuthnRegistrationVerification(req.body));
   };
 }
