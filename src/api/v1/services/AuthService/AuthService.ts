@@ -115,41 +115,44 @@ export default class AuthService {
     return regOptions;
   };
   public static WebAuthnRegistrationVerification = async (credential: any) => {
-    const user = await UserRepository.findOneByEmail(credential['user']['email']);
-    const auth = await AuthOptionsRepository.FindOneByUserId(user.id, 'passkey');
-    const data = credential['data'];
-    const expectedChallenge = user.currentChallenge;
-    let verification: VerifiedRegistrationResponse;
+    console.log(credential);
     try {
+      const user = await UserRepository.findOneByEmail(credential['user']['email']);
+      const auth = await AuthOptionsRepository.FindOneByUserId(user.id, 'passkey');
+      const data = credential['data'];
+      const expectedChallenge = user.currentChallenge;
+      let verification: VerifiedRegistrationResponse;
       const options: VerifyRegistrationResponseOpts = {
-        response: credential,
+        response: credential['data'],
         expectedChallenge: `${expectedChallenge}`,
         expectedOrigin: 'http://localhost:5173',
         expectedRPID: 'localhost',
         requireUserVerification: true,
       };
       verification = await verifyRegistrationResponse(options);
+      const { verified, registrationInfo } = verification;
+      if (verified && registrationInfo) {
+        const { credentialPublicKey, credentialID, counter } = registrationInfo;
+        const existingDevice = auth.key['devices']
+          ? (auth.key['devices'] as []).find((device: any) =>
+              Buffer.from(device.credentialID.data).equals(credentialID),
+            )
+          : false;
+        if (!existingDevice) {
+          const newDevice = {
+            credentialPublicKey,
+            credentialID,
+            counter,
+            transports: data.response.transports,
+          };
+          await AuthOptionsRepository.AddDevice(auth.id, user.id, newDevice);
+        }
+      }
+      return { ok: true };
     } catch (error) {
       console.log(error);
       throw new Unexpected();
     }
-    const { verified, registrationInfo } = verification;
-    if (verified && registrationInfo) {
-      const { credentialPublicKey, credentialID, counter } = registrationInfo;
-      const existingDevice = auth.key['devices']
-        ? (auth.key['devices'] as []).find((device: any) => Buffer.from(device.credentialID.data).equals(credentialID))
-        : false;
-      if (!existingDevice) {
-        const newDevice = {
-          credentialPublicKey,
-          credentialID,
-          counter,
-          transports: data.response.transports,
-        };
-        await AuthOptionsRepository.AddDevice(auth.id, user.id, newDevice);
-      }
-    }
-    return { ok: true };
   };
   public static WebAuthnLoginOptions = async () => {};
   public static WebAuthnLoginVerification = async () => {};
