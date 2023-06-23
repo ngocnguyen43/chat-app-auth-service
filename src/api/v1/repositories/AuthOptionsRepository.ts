@@ -136,27 +136,7 @@ export default class AuthOptionsRepository {
       throw new Unexpected();
     }
   };
-  public static AddChallenge = async (userId: string, challenge: string) => {
-    try {
-      const execute: string | any[] = [];
-      execute.push(
-        prisma.user.update({
-          where: {
-            id: userId,
-          },
-          data: {
-            currentChallenge: challenge,
-          },
-        }),
-      );
-      if (execute.length > 0) {
-        await prisma.$transaction(execute);
-      }
-    } catch (error) {
-      console.log(error);
-      throw new Unexpected();
-    }
-  };
+
   public static AddDevice = async (id: string, userId: string, device: any) => {
     try {
       const execute: string | any[] = [];
@@ -167,9 +147,10 @@ export default class AuthOptionsRepository {
             option: 'passkey',
           },
         })) ?? {};
+      console.log('check data:::', data);
       const json = {
         ...data,
-        devices: [...data['devices'], device],
+        devices: [...(data['key']['devices'] as []), device],
         webauthn: true,
       };
       execute.push(

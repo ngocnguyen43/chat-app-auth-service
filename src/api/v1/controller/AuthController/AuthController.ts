@@ -24,4 +24,7 @@ export default class AuthController {
   public static WebAuthnRegistrationVerification = async (req: Request, res: Response, next: NextFunction) => {
     return res.status(200).json(await AuthService.WebAuthnRegistrationVerification(req.body.data));
   };
+  public static WebAuthnLoginOptions = async (req: Request, res: Response, next: NextFunction) => {
+    return res.status(200).json(await AuthService.WebAuthnLoginOptions(req.body.email as string));
+  };
 }

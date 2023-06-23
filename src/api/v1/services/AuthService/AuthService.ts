@@ -3,9 +3,11 @@ import { UserRepository, AuthOptionsRepository } from '../../repositories';
 import { CREATED } from '../../utils';
 import jwt, { UserJWTPayload } from 'jsonwebtoken';
 import {
+  GenerateAuthenticationOptionsOpts,
   GenerateRegistrationOptionsOpts,
   VerifiedRegistrationResponse,
   VerifyRegistrationResponseOpts,
+  generateAuthenticationOptions,
   generateRegistrationOptions,
   verifyRegistrationResponse,
 } from '@simplewebauthn/server';
@@ -111,7 +113,7 @@ export default class AuthService {
       supportedAlgorithmIDs: [-7, -257],
     };
     const regOptions = generateRegistrationOptions(options);
-    await AuthOptionsRepository.AddChallenge(user.id, regOptions.challenge);
+    await UserRepository.AddChallenge(user.id, regOptions.challenge);
     return regOptions;
   };
   public static WebAuthnRegistrationVerification = async (credential: any) => {
@@ -134,18 +136,26 @@ export default class AuthService {
       if (verified && registrationInfo) {
         const { credentialPublicKey, credentialID, counter } = registrationInfo;
         const existingDevice = auth
-          ? (auth.key['devices'] as []).find((device: any) =>
-              Buffer.from(device.credentialID.data).equals(credentialID),
-            )
+          ? (auth.key['devices'] as []).find((device: any) => Buffer.from(device.credentialID).equals(credentialID))
           : false;
-        if (!existingDevice) {
+        if (!auth) {
           const newDevice = {
-            credentialPublicKey,
-            credentialID,
+            credentialPublicKey: Array.from(credentialPublicKey),
+            credentialID: Array.from(credentialID),
             counter,
             transports: data.response.transports,
           };
           await AuthOptionsRepository.CreateDevice(user.id, newDevice);
+          console.log(newDevice);
+        }
+        if (!existingDevice) {
+          const newDevice = {
+            credentialPublicKey: Array.from(credentialPublicKey),
+            credentialID: Array.from(credentialID),
+            counter,
+            transports: data.response.transports,
+          };
+          await AuthOptionsRepository.AddDevice(auth.id, user.id, newDevice);
           console.log(newDevice);
         }
       }
@@ -155,6 +165,34 @@ export default class AuthService {
       throw new Unexpected();
     }
   };
-  public static WebAuthnLoginOptions = async () => {};
+  public static WebAuthnLoginOptions = async (email: string) => {
+    const user = await UserRepository.findOneByEmail(email);
+    const authn = await AuthOptionsRepository.FindOneByUserId(user.id, 'passkey');
+    const options: GenerateAuthenticationOptionsOpts = {
+      timeout: 60000,
+      allowCredentials: authn
+        ? (authn.key['devices'] as []).map((device: any) => ({
+            id: device.credentialID,
+            type: 'public-key',
+            // Optional
+            transports: device.transports,
+          }))
+        : [],
+      // devices:
+      //   user && authn && authn.key['devices']
+      //     ? authn.key['devices'].map((dev) => ({
+      //         id: dev.credentialID,
+      //         type: 'public-key',
+      //         transports: dev.transports,
+      //       }))
+      //     : [],
+      userVerification: 'required',
+      rpID: 'localhost',
+    };
+    const loginOpts = generateAuthenticationOptions(options);
+    const challenge = loginOpts.challenge;
+    await UserRepository.AddChallenge(user.id, challenge);
+    return loginOpts;
+  };
   public static WebAuthnLoginVerification = async () => {};
 }

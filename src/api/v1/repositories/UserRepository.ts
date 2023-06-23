@@ -1,6 +1,6 @@
 import { RegistrationDto, userGoogleLoginDto } from '@v1/interface';
 import { prisma, Prisma, User } from '../config';
-import { UserAlreadyExists } from './exceptions';
+import { Unexpected, UserAlreadyExists } from './exceptions';
 export default class UserRepository {
   public static async findOneById(id: string) {
     const user = await prisma.user.findFirst({
@@ -51,5 +51,26 @@ export default class UserRepository {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
     return res;
+  };
+  public static AddChallenge = async (userId: string, challenge: string) => {
+    try {
+      const execute: string | any[] = [];
+      execute.push(
+        prisma.user.update({
+          where: {
+            id: userId,
+          },
+          data: {
+            currentChallenge: challenge,
+          },
+        }),
+      );
+      if (execute.length > 0) {
+        await prisma.$transaction(execute);
+      }
+    } catch (error) {
+      console.log(error);
+      throw new Unexpected();
+    }
   };
 }
