@@ -11,3 +11,4 @@ router.post('/auth/login-google-id', ErrorHandler(AuthController.loginWithIDGool
 router.post('/auth/webauth-registration-options', ErrorHandler(AuthController.WebAuthnRegistrationOptions));
 router.post('/auth/webauth-registration-verification', ErrorHandler(AuthController.WebAuthnRegistrationVerification));
 router.post('/auth/webauth-login-options', ErrorHandler(AuthController.WebAuthnLoginOptions));
+router.post('/auth/webauth-login-verification', ErrorHandler(AuthController.WebAuthnLoginVerification));

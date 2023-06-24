@@ -18,3 +18,12 @@ export class Unexpected implements BaseException {
     return this.status_code;
   }
 }
+export class NotFound implements BaseException {
+  constructor(private err = 'not found', private status_code = 404) {}
+  getErr(): string {
+    return this.err;
+  }
+  getStatusCode(): number {
+    return this.status_code;
+  }
+}

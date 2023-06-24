@@ -2,16 +2,20 @@ import { LogInDto, RegistrationDto, userGoogleLoginDto } from '@v1/interface';
 import { UserRepository, AuthOptionsRepository } from '../../repositories';
 import { CREATED } from '../../utils';
 import jwt, { UserJWTPayload } from 'jsonwebtoken';
+import base64url from 'base64url';
 import {
   GenerateAuthenticationOptionsOpts,
   GenerateRegistrationOptionsOpts,
+  VerifiedAuthenticationResponse,
   VerifiedRegistrationResponse,
+  VerifyAuthenticationResponseOpts,
   VerifyRegistrationResponseOpts,
   generateAuthenticationOptions,
   generateRegistrationOptions,
+  verifyAuthenticationResponse,
   verifyRegistrationResponse,
 } from '@simplewebauthn/server';
-import { Unexpected } from '../../repositories/exceptions';
+import { NotFound, Unexpected } from '../../repositories/exceptions';
 declare module 'jsonwebtoken' {
   interface UserJWTPayload extends jwt.JwtPayload {
     iss: string;
@@ -121,7 +125,7 @@ export default class AuthService {
       const user = await UserRepository.findOneByEmail(credential['user']['email']);
       const auth = await AuthOptionsRepository.FindOneByUserId(user.id, 'passkey');
       const data = credential['loginRes'];
-      console.log(data);
+      // console.log(data);
       const expectedChallenge = user.currentChallenge;
       let verification: VerifiedRegistrationResponse;
       const options = {
@@ -133,8 +137,10 @@ export default class AuthService {
       };
       verification = await verifyRegistrationResponse(options);
       const { verified, registrationInfo } = verification;
+      // console.log('check:::', Buffer.from(auth.key['devices'][0]['credentialID']));
       if (verified && registrationInfo) {
         const { credentialPublicKey, credentialID, counter } = registrationInfo;
+        // console.log('check credentailID:::', credentialID);
         const existingDevice = auth
           ? (auth.key['devices'] as []).find((device: any) => Buffer.from(device.credentialID).equals(credentialID))
           : false;
@@ -147,16 +153,17 @@ export default class AuthService {
           };
           await AuthOptionsRepository.CreateDevice(user.id, newDevice);
           console.log(newDevice);
-        }
-        if (!existingDevice) {
-          const newDevice = {
-            credentialPublicKey: Array.from(credentialPublicKey),
-            credentialID: Array.from(credentialID),
-            counter,
-            transports: data.response.transports,
-          };
-          await AuthOptionsRepository.AddDevice(auth.id, user.id, newDevice);
-          console.log(newDevice);
+        } else {
+          if (!existingDevice) {
+            const newDevice = {
+              credentialPublicKey: Array.from(credentialPublicKey),
+              credentialID: Array.from(credentialID),
+              counter,
+              transports: data.response.transports,
+            };
+            await AuthOptionsRepository.AddDevice(auth.id, user.id, newDevice);
+            console.log(newDevice);
+          }
         }
       }
       return { ok: true };
@@ -178,15 +185,8 @@ export default class AuthService {
             transports: device.transports,
           }))
         : [],
-      // devices:
-      //   user && authn && authn.key['devices']
-      //     ? authn.key['devices'].map((dev) => ({
-      //         id: dev.credentialID,
-      //         type: 'public-key',
-      //         transports: dev.transports,
-      //       }))
-      //     : [],
-      userVerification: 'required',
+      // userVerification: 'required',
+      userVerification: 'preferred',
       rpID: 'localhost',
     };
     const loginOpts = generateAuthenticationOptions(options);
@@ -194,5 +194,53 @@ export default class AuthService {
     await UserRepository.AddChallenge(user.id, challenge);
     return loginOpts;
   };
-  public static WebAuthnLoginVerification = async () => {};
+  public static WebAuthnLoginVerification = async (email: string, data: any) => {
+    const user = await UserRepository.findOneByEmail(email);
+    if (!user) {
+      throw new NotFound();
+    }
+    const authn = await AuthOptionsRepository.FindOneByUserId(user.id, 'passkey');
+    const expectedChallenge = user.currentChallenge;
+    let dbAuthenticator;
+    const bodyCredIDBuffer = base64url.toBuffer(data.rawId);
+    // console.log(data);
+    for (const device of authn.key['devices']) {
+      const currentCredential = Buffer.from(device.credentialID);
+      if (bodyCredIDBuffer.equals(currentCredential)) {
+        dbAuthenticator = device;
+        break;
+      }
+    }
+    if (!dbAuthenticator) {
+      return { ok: false };
+    }
+    let verification: VerifiedAuthenticationResponse;
+    try {
+      const options: VerifyAuthenticationResponseOpts = {
+        response: data,
+        expectedChallenge: `${expectedChallenge}`,
+        expectedOrigin: 'http://localhost:5173',
+        expectedRPID: 'localhost',
+        authenticator: {
+          ...dbAuthenticator,
+          credentialPublicKey: Buffer.from(dbAuthenticator.credentialPublicKey), // Re-convert to Buffer from JSON
+        },
+        requireUserVerification: true,
+      };
+      verification = await verifyAuthenticationResponse(options);
+    } catch (error) {
+      throw new Unexpected();
+    }
+    const { verified, authenticationInfo } = verification;
+    // console.log('check verify:::::', { verified, authenticationInfo });
+    // const passkeys = (await AuthOptionsRepository.FindPasskeys(user.id)) as [];
+    // console.log(Buffer.from(passkeys.at(1)['credentialID']).equals(bodyCredIDBuffer));
+    // console.log(bodyCredIDBuffer);
+    if (verified) {
+      await AuthOptionsRepository.UpdatePasskeyCounter(authn.id, user.id, data['rawId'], authenticationInfo.newCounter);
+    }
+    return { ok: true };
+  };
+  public static FacebookLogin = async () => {};
+  public static GithubLogin = async () => {};
 }

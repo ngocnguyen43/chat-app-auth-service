@@ -1,3 +1,4 @@
+import base64url from 'base64url';
 import { prisma, Prisma } from '../config';
 import { decode, Options } from '../utils';
 import { encode } from '../utils';
@@ -140,16 +141,15 @@ export default class AuthOptionsRepository {
   public static AddDevice = async (id: string, userId: string, device: any) => {
     try {
       const execute: string | any[] = [];
-      const data =
-        (await prisma.authnOptions.findFirst({
-          where: {
-            userId: userId,
-            option: 'passkey',
-          },
-        })) ?? {};
+      const data = await prisma.authnOptions.findFirst({
+        where: {
+          userId: userId,
+          option: 'passkey',
+        },
+      });
       console.log('check data:::', data);
       const json = {
-        ...data,
+        ...(data['key'] as []),
         devices: [...(data['key']['devices'] as []), device],
         webauthn: true,
       };
@@ -185,6 +185,48 @@ export default class AuthOptionsRepository {
             userId: userId,
             key: json,
           },
+        }),
+      );
+      if (execute.length > 0) {
+        await prisma.$transaction(execute);
+      }
+    } catch (error) {
+      console.log(error);
+      throw new Unexpected();
+    }
+  };
+  public static FindPasskeys = async (userId: string) => {
+    const passkeys = await prisma.authnOptions.findFirst({
+      where: {
+        userId: userId,
+        option: 'passkey',
+      },
+    });
+    return passkeys.key ?? null;
+  };
+  public static UpdatePasskeyCounter = async (id: string, userId: string, raw: string, counter: number) => {
+    try {
+      const bodyCredIDBuffer = base64url.toBuffer(raw);
+      const passkeys = await this.FindPasskeys(userId);
+      if (!passkeys) {
+        throw new Unexpected();
+      }
+      const execute: string | any[] = [];
+      (passkeys['devices'] as []).forEach((device: any) => {
+        if (Buffer.from(device['credentialID']).equals(bodyCredIDBuffer)) {
+          device['counter'] = counter;
+        }
+      });
+      const whereClause = Prisma.validator<Prisma.AuthnOptionsWhereInput>()({
+        id: id,
+      });
+      const dataClause = Prisma.validator<Prisma.AuthnOptionsUpdateInput>()({
+        key: passkeys,
+      });
+      execute.push(
+        prisma.authnOptions.update({
+          where: whereClause,
+          data: dataClause,
         }),
       );
       if (execute.length > 0) {
