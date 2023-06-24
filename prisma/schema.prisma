@@ -2,7 +2,8 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "fullTextIndex"]
 }
 
 datasource db {
@@ -27,8 +28,10 @@ model User {
   createdAt        DateTime       @default(now()) @map("created_at")
   updatedAt        DateTime       @updatedAt @map("updated_at")
   AuthOtions       AuthnOptions[]
+  GroupUsers       GroupUsers[]
 
   @@index([email, id])
+  @@fulltext([email, firstName, lastName])
   @@map("users")
 }
 
@@ -44,16 +47,17 @@ model AuthnOptions {
 }
 
 model GroupUsers {
-  id      String @id @unique @db.VarChar(36)
-  userId  String @map("user_id") @db.VarChar(36)
-  groupId String @map("group_id") @db.VarChar(36)
+  id      String @id @unique @default(uuid())
+  userId  String @map("user_id")
+  groupId String @map("group_id")
   Groups  Group  @relation(fields: [groupId], references: [id])
+  User    User?  @relation(fields: [userId], references: [id])
 }
 
 model Group {
   id           String        @id @unique @default(uuid())
-  creator      String        @db.VarChar(36)
-  createdAt    DateTime      @default(now()) @db.DateTime(0)
+  creator      String
+  createdAt    DateTime      @default(now()) @map("created_at") @db.DateTime(0)
   GroupUsers   GroupUsers[]
   Conversation Conversation?
 }
@@ -62,9 +66,9 @@ model Conversation {
   id            String    @id @unique @default(uuid())
   groupId       String    @unique @map("group_id") @db.VarChar(36)
   Group         Group     @relation(fields: [groupId], references: [id])
-  lastMessage   String?   @db.Text
-  lastMessageAt DateTime? @default(now()) @db.DateTime(0)
-  creator       String?   @db.VarChar(36)
+  lastMessage   String?   @map("last_message") @db.Text
+  lastMessageAt DateTime? @default(now()) @map("last_message_at") @db.DateTime(0)
+  creator       String
   messages      Message[]
 
   @@map("conversations")
