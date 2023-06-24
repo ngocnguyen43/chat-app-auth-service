@@ -18,7 +18,7 @@ export default class ServerLoader {
     app.use(
       cors({
         origin: '*',
-        credentials: true,
+        // credentials: true,
       }),
     );
     return app;
