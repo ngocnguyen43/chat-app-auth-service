@@ -30,6 +30,8 @@ export default class AuthController {
   public static WebAuthnLoginVerification = async (req: Request, res: Response, next: NextFunction) => {
     return res.status(200).json(await AuthService.WebAuthnLoginVerification(req.body.email as string, req.body.data));
   };
-  public static LoginWithFacebook;
+  public static LoginWithFacebook = async (req: Request, res: Response, next: NextFunction) => {
+    return res.status(200).json(await AuthService.FacebookLogin(req.body.id as string));
+  };
   public static LoginWithGithub;
 }

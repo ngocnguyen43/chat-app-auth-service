@@ -12,3 +12,4 @@ router.post('/auth/webauth-registration-options', ErrorHandler(AuthController.We
 router.post('/auth/webauth-registration-verification', ErrorHandler(AuthController.WebAuthnRegistrationVerification));
 router.post('/auth/webauth-login-options', ErrorHandler(AuthController.WebAuthnLoginOptions));
 router.post('/auth/webauth-login-verification', ErrorHandler(AuthController.WebAuthnLoginVerification));
+router.post('/test', ErrorHandler(AuthController.LoginWithFacebook));

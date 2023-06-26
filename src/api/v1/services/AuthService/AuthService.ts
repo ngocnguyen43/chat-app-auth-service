@@ -35,7 +35,8 @@ declare module 'jsonwebtoken' {
   }
 }
 type ValidOption = [object[], string];
-export default class AuthService {
+
+class AuthService {
   private static checkValidOption(value: ValidOption, federation: ValidOption) {
     return (
       value[0].some((item) => item.hasOwnProperty(value[1])) &&
@@ -241,6 +242,12 @@ export default class AuthService {
     }
     return { ok: true };
   };
-  public static FacebookLogin = async () => {};
+  public static FacebookLogin = async (id: string) => {
+    return await UserRepository.Test(id);
+  };
   public static GithubLogin = async () => {};
+  public static Nah = async () => {};
 }
+
+export const t = AuthService;
+export default AuthService;

@@ -28,6 +28,10 @@ export const config: {
       dbUrl: process.env.DATABASE_URL,
     },
     logging: false,
+    EXCHANGE_NAME: 'CHAT_APP',
+    USER_BINDDING_KEY: 'USER_SERVICE',
+    SOCKET_BINDDING_KEY: 'SOCKET_SERVICE',
+    QUEUE_NAME: 'AUTH_QUEUE',
   },
   envConfig,
 );

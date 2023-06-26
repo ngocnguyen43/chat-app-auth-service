@@ -1,6 +1,8 @@
 import { RegistrationDto, userGoogleLoginDto } from '@v1/interface';
 import { prisma, Prisma, User } from '../config';
 import { Unexpected, UserAlreadyExists } from './exceptions';
+import { PrismaClient } from '@prisma/client';
+import { Args, DynamicModelExtensionThis } from '@prisma/client/runtime';
 export default class UserRepository {
   public static async findOneById(id: string) {
     const user = await prisma.user.findFirst({
@@ -72,5 +74,28 @@ export default class UserRepository {
       console.log(error);
       throw new Unexpected();
     }
+  };
+  public static Test = async (id: string) => {
+    const xprisma = prisma.$extends({
+      result: {
+        user: {
+          recipient: {
+            needs: { id: true },
+            compute(user) {
+              return user.id == id ? true : false;
+            },
+          },
+          current_page: {
+            needs: { id: true },
+            compute(data) {
+              return data.id;
+            },
+          },
+        },
+      },
+    });
+    return await xprisma.user.findMany({
+      skip: 1,
+    });
   };
 }
