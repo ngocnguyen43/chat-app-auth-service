@@ -1,8 +1,9 @@
 import compression from 'compression';
-import express, { Express, json, urlencoded } from 'express';
-import morgan from 'morgan';
-import helmet from 'helmet';
 import cors from 'cors';
+import express, { Express, json, urlencoded } from 'express';
+import helmet from 'helmet';
+import morgan from 'morgan';
+
 export default class ServerLoader {
   public static init(): Express {
     const app: Express = express();

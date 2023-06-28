@@ -1,6 +1,8 @@
 import { NextFunction, Request, Response } from 'express';
-import AuthService from '../../services/AuthService/AuthService';
+
 import { LogInDto, RegistrationDto, userGoogleLoginDto } from '@v1/interface';
+
+import AuthService from '../../services/AuthService/AuthService';
 
 export default class AuthController {
   public static registration = async (req: Request, res: Response, next: NextFunction) => {

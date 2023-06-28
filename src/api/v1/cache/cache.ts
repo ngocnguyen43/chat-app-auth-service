@@ -1,4 +1,5 @@
 import { createClient } from 'redis';
+
 import { config } from '../config';
 
 const redisURL = `redis://${config['redis_host']}`;

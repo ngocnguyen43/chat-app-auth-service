@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { ErrorHandler } from '../utils';
+
 import { AuthController } from '../controller';
+import { ErrorHandler } from '../utils';
 
 export const router = Router();
 router.post('/auth/register', ErrorHandler(AuthController.registration));

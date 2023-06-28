@@ -1,8 +1,10 @@
-import { RegistrationDto, userGoogleLoginDto } from '@v1/interface';
-import { prisma, Prisma, User } from '../config';
-import { Unexpected, UserAlreadyExists } from './exceptions';
 import { PrismaClient } from '@prisma/client';
 import { Args, DynamicModelExtensionThis } from '@prisma/client/runtime';
+import { RegistrationDto, userGoogleLoginDto } from '@v1/interface';
+
+import { prisma, Prisma, User } from '../config';
+import { Unexpected, UserAlreadyExists } from './exceptions';
+
 export default class UserRepository {
   public static async findOneById(id: string) {
     const user = await prisma.user.findFirst({

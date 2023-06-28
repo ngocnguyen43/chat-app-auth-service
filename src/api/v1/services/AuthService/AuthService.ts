@@ -1,21 +1,18 @@
-import { LogInDto, RegistrationDto, userGoogleLoginDto } from '@v1/interface';
-import { UserRepository, AuthOptionsRepository } from '../../repositories';
-import { CREATED } from '../../utils';
-import jwt, { UserJWTPayload } from 'jsonwebtoken';
 import base64url from 'base64url';
+import jwt, { UserJWTPayload } from 'jsonwebtoken';
+
 import {
-  GenerateAuthenticationOptionsOpts,
-  GenerateRegistrationOptionsOpts,
-  VerifiedAuthenticationResponse,
-  VerifiedRegistrationResponse,
-  VerifyAuthenticationResponseOpts,
-  VerifyRegistrationResponseOpts,
-  generateAuthenticationOptions,
-  generateRegistrationOptions,
-  verifyAuthenticationResponse,
-  verifyRegistrationResponse,
+    generateAuthenticationOptions, GenerateAuthenticationOptionsOpts, generateRegistrationOptions,
+    GenerateRegistrationOptionsOpts, VerifiedAuthenticationResponse, VerifiedRegistrationResponse,
+    verifyAuthenticationResponse, VerifyAuthenticationResponseOpts, verifyRegistrationResponse,
+    VerifyRegistrationResponseOpts
 } from '@simplewebauthn/server';
+import { LogInDto, RegistrationDto, userGoogleLoginDto } from '@v1/interface';
+
+import { AuthOptionsRepository, UserRepository } from '../../repositories';
 import { NotFound, Unexpected } from '../../repositories/exceptions';
+import { CREATED } from '../../utils';
+
 declare module 'jsonwebtoken' {
   interface UserJWTPayload extends jwt.JwtPayload {
     iss: string;

@@ -1,6 +1,7 @@
-import { AuthnOptions } from '../config';
 import amqplib from 'amqplib';
-import { config } from '../config';
+
+import { AuthnOptions, config } from '../config';
+
 export { ErrorHandler } from './errorHandler';
 export * from './responses';
 export { encode } from './encode';

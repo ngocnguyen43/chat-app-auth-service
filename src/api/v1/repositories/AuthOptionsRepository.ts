@@ -1,8 +1,9 @@
 import base64url from 'base64url';
+
 import { prisma, Prisma } from '../config';
-import { decode, Options } from '../utils';
-import { encode } from '../utils';
+import { decode, encode, Options } from '../utils';
 import { Unexpected } from './exceptions';
+
 type OAuthType = 'google' | 'facebook' | 'github';
 export default class AuthOptionsRepository {
   public static async AddPassword(userId: string, password: string) {
