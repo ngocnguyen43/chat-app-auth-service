@@ -4,7 +4,7 @@ import EventEmitter from 'events';
 import { config } from '../config';
 import { Consumer } from './Consumer';
 import { Producer } from './Producer';
-import { retryConnection } from '../utils';
+import { retryConnection, start } from '../utils';
 export interface IRabbitMQClient {
   initialize: () => Promise<void>;
 }
@@ -22,6 +22,8 @@ class RabbitMQClient implements IRabbitMQClient {
 
   private eventEmitter: EventEmitter;
 
+  private clientName: string;
+
   public static getInstance() {
     if (!this.instance) {
       this.instance = new RabbitMQClient();
@@ -34,7 +36,13 @@ class RabbitMQClient implements IRabbitMQClient {
       return;
     }
     try {
-      this.connection = await retryConnection<Connection>(3, connect(config['MESSAGE_BROKER_URL']), 'rabbitMQ', 2);
+      // this.connection = await retryConnection<Connection>(5, connect(config['MESSAGE_BROKER_URL']), 'rabbitMQ', 3);
+      this.connection = await start();
+      // this.connection = await retryConnection(2000, (err) => {
+      //   if (!err) {
+      //     console.log('connect to rabbitmq successfully');
+      //   }
+      // });
       if (this.connection) {
         this.producerChannel = await this.connection.createChannel();
         this.consumerChannel = await this.connection.createChannel();
@@ -48,6 +56,7 @@ class RabbitMQClient implements IRabbitMQClient {
       }
     } catch (error) {
       console.log(error);
+      setTimeout(this.initialize, 1000);
     }
   };
   async produce(data: any) {
@@ -55,6 +64,10 @@ class RabbitMQClient implements IRabbitMQClient {
       await this.initialize();
     }
     return await this.producer.produceMessages(data);
+  }
+  toClient(clientName: string) {
+    this.clientName = clientName;
+    return this;
   }
 }
 export default RabbitMQClient.getInstance();

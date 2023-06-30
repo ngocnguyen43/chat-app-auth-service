@@ -3,7 +3,7 @@ import { Container, ContainerModule } from 'inversify';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { DefaultArgs } from '@prisma/client/runtime';
 
-import { prisma } from '../api/v1/config';
+import { prisma } from './config';
 import { AuthRepository, AuthService, IAuhtService, IAuthRepository, TYPES } from './auth/v1';
 
 const thirdPartyDependencies = new ContainerModule((bind) => {

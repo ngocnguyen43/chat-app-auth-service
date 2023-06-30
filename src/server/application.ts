@@ -13,7 +13,7 @@ import { config } from '../config';
 import { container } from './container';
 import { AbstractApplication } from './libs/base-application';
 import { RabbitMQClient } from './message-broker';
-
+import { router } from './health-check';
 dotenv.config();
 export class Application extends AbstractApplication {
   setup(): void | Promise<void> {
@@ -34,6 +34,7 @@ export class Application extends AbstractApplication {
           // credentials: true,
         }),
       );
+      app.use('/health-check', router);
     });
     const app = server.build();
     app.listen(config.port, () => {

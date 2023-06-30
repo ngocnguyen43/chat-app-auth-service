@@ -18,7 +18,10 @@ export class AuthController {
   @httpPost('/test')
   async Test(req: Request, res: Response) {
     console.log(req.body);
-    await this.rabbitMq.produce(req.body);
+    await this.rabbitMq
+      .toClient('abc')
+      .produce(req.body)
+      .catch((err) => console.log(err));
     return res.json({ ok: true });
   }
 }
