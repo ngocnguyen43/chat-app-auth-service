@@ -4,9 +4,9 @@ import EventEmitter from 'events';
 import { config } from '../config';
 import { Consumer } from './Consumer';
 import { Producer } from './Producer';
-import { retryConnection, start } from '../utils';
+import { logger } from '../common/logger';
 export interface IRabbitMQClient {
-  initialize: () => Promise<void>;
+  initialize: (name: string) => Promise<void>;
 }
 class RabbitMQClient implements IRabbitMQClient {
   private constructor() {}
@@ -14,15 +14,18 @@ class RabbitMQClient implements IRabbitMQClient {
   private static instance: RabbitMQClient;
   private isInitialized = false;
 
-  private producer: Producer;
-  private consumer: Consumer;
   private connection: Connection;
-  private producerChannel: Channel;
-  private consumerChannel: Channel;
+  private clientProducer: Producer;
+  private clientConsumer: Consumer;
+  private clientProducerChannel: Channel;
+  private clientConsumerChanel: Channel;
+
+  private serverProducer: Producer;
+  private serverConsumer: Consumer;
+  private serverProducerChannel: Channel;
+  private serverConsumerChanel: Channel;
 
   private eventEmitter: EventEmitter;
-
-  private clientName: string;
 
   public static getInstance() {
     if (!this.instance) {
@@ -31,43 +34,50 @@ class RabbitMQClient implements IRabbitMQClient {
     return this.instance;
   }
 
-  initialize = async () => {
+  initialize = async (name: string) => {
     if (this.isInitialized) {
       return;
     }
     try {
-      // this.connection = await retryConnection<Connection>(5, connect(config['MESSAGE_BROKER_URL']), 'rabbitMQ', 3);
-      this.connection = await start();
-      // this.connection = await retryConnection(2000, (err) => {
-      //   if (!err) {
-      //     console.log('connect to rabbitmq successfully');
-      //   }
-      // });
+      this.connection = await connect(config['MESSAGE_BROKER_URL']);
+      logger.info('connect to rabbitMQ  successfully');
       if (this.connection) {
-        this.producerChannel = await this.connection.createChannel();
-        this.consumerChannel = await this.connection.createChannel();
-        const { queue: replyQueue } = await this.consumerChannel.assertQueue('', { exclusive: true });
-        this.eventEmitter = new EventEmitter();
-        this.producer = new Producer(this.producerChannel, replyQueue, this.eventEmitter);
-        this.consumer = new Consumer(this.consumerChannel, replyQueue, this.eventEmitter);
-        this.consumer.comsumeMessage();
+        this.serverProducerChannel = await this.connection.createChannel();
+        this.serverConsumerChanel = await this.connection.createChannel();
+        const { queue: replyQueue } = await this.serverConsumerChanel.assertQueue(name, { exclusive: true });
+        this.serverProducer = new Producer(this.serverProducerChannel, replyQueue);
+        this.serverConsumer = new Consumer(this.serverConsumerChanel, replyQueue);
+        this.serverConsumer.clientComsumeMessage();
 
         this.isInitialized = true;
       }
     } catch (error) {
       console.log(error);
-      setTimeout(this.initialize, 1000);
     }
   };
-  async produce(data: any) {
+  async clientProduce(target: string, data: any) {
     if (!this.connection) {
-      await this.initialize();
+      logger.error('rabbitMQ connection error');
+      return;
     }
-    return await this.producer.produceMessages(data);
+    return await this.clientProduce(target, data);
   }
-  toClient(clientName: string) {
-    this.clientName = clientName;
+  serverProduce = async (data: any, correlationId?: string, replyToQueue?: string) => {
+    if (!this.connection) {
+      logger.error('cannot produce message because no rabbitMQ connection');
+      return;
+    }
+    return await this.serverProducer.serverProduceMessage(data, correlationId, replyToQueue);
+  };
+  toClient = async () => {
+    this.clientProducerChannel = await this.connection.createChannel();
+    this.clientConsumerChanel = await this.connection.createChannel();
+    const { queue: replyQueue } = await this.clientConsumerChanel.assertQueue('', { exclusive: true });
+    this.eventEmitter = new EventEmitter();
+    this.clientProducer = new Producer(this.clientProducerChannel, replyQueue, this.eventEmitter);
+    this.clientConsumer = new Consumer(this.clientConsumerChanel, replyQueue, this.eventEmitter);
+    this.clientConsumer.clientComsumeMessage();
     return this;
-  }
+  };
 }
 export default RabbitMQClient.getInstance();
