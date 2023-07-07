@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { ErrorHandler } from '../utils';
+
 import { AuthController } from '../controller';
+import { ErrorHandler } from '../utils';
 
 export const router = Router();
 router.post('/auth/register', ErrorHandler(AuthController.registration));
@@ -12,3 +13,4 @@ router.post('/auth/webauth-registration-options', ErrorHandler(AuthController.We
 router.post('/auth/webauth-registration-verification', ErrorHandler(AuthController.WebAuthnRegistrationVerification));
 router.post('/auth/webauth-login-options', ErrorHandler(AuthController.WebAuthnLoginOptions));
 router.post('/auth/webauth-login-verification', ErrorHandler(AuthController.WebAuthnLoginVerification));
+router.post('/test', ErrorHandler(AuthController.LoginWithFacebook));

@@ -1,6 +1,8 @@
 import { NextFunction, Request, Response } from 'express';
-import AuthService from '../../services/AuthService/AuthService';
+
 import { LogInDto, RegistrationDto, userGoogleLoginDto } from '@v1/interface';
+
+import AuthService from '../../services/AuthService/AuthService';
 
 export default class AuthController {
   public static registration = async (req: Request, res: Response, next: NextFunction) => {
@@ -30,6 +32,8 @@ export default class AuthController {
   public static WebAuthnLoginVerification = async (req: Request, res: Response, next: NextFunction) => {
     return res.status(200).json(await AuthService.WebAuthnLoginVerification(req.body.email as string, req.body.data));
   };
-  public static LoginWithFacebook;
+  public static LoginWithFacebook = async (req: Request, res: Response, next: NextFunction) => {
+    return res.status(200).json(await AuthService.FacebookLogin(req.body.id as string));
+  };
   public static LoginWithGithub;
 }

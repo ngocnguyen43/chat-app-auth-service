@@ -50,38 +50,38 @@ model GroupUsers {
   id      String @id @unique @default(uuid())
   userId  String @map("user_id")
   groupId String @map("group_id")
-  Groups  Group  @relation(fields: [groupId], references: [id])
+  // Groups  Group  @relation(fields: [groupId], references: [id])
   User    User?  @relation(fields: [userId], references: [id])
 }
 
-model Group {
-  id           String        @id @unique @default(uuid())
-  creator      String
-  createdAt    DateTime      @default(now()) @map("created_at") @db.DateTime(0)
-  GroupUsers   GroupUsers[]
-  Conversation Conversation?
-}
+// model Group {
+//   id           String        @id @unique @default(uuid())
+//   creator      String
+//   createdAt    DateTime      @default(now()) @map("created_at") @db.DateTime(0)
+//   GroupUsers   GroupUsers[]
+//   Conversation Conversation?
+// }
 
-model Conversation {
-  id            String    @id @unique @default(uuid())
-  groupId       String    @unique @map("group_id") @db.VarChar(36)
-  Group         Group     @relation(fields: [groupId], references: [id])
-  lastMessage   String?   @map("last_message") @db.Text
-  lastMessageAt DateTime? @default(now()) @map("last_message_at") @db.DateTime(0)
-  creator       String
-  messages      Message[]
+// model Conversation {
+//   id            String    @id @unique @default(uuid())
+//   groupId       String    @unique @map("group_id") @db.VarChar(36)
+//   Group         Group     @relation(fields: [groupId], references: [id])
+//   lastMessage   String?   @map("last_message") @db.Text
+//   lastMessageAt DateTime? @default(now()) @map("last_message_at") @db.DateTime(0)
+//   creator       String
+//   messages      Message[]
 
-  @@map("conversations")
-}
+//   @@map("conversations")
+// }
 
-model Message {
-  id             Int          @id @default(autoincrement())
-  conversationId String       @db.VarChar(36)
-  from           String       @db.VarChar(32)
-  message        String       @db.Text
-  createdAt      DateTime     @default(now()) @db.DateTime(0)
-  nah            String
-  Conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+// model Message {
+//   id             Int          @id @default(autoincrement())
+//   conversationId String       @db.VarChar(36)
+//   from           String       @db.VarChar(32)
+//   message        String       @db.Text
+//   createdAt      DateTime     @default(now()) @db.DateTime(0)
+//   nah            String
+//   Conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
-  @@map("messages")
-}
+//   @@map("messages")
+// }
