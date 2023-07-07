@@ -47,7 +47,7 @@ export class Application extends AbstractApplication {
       app.get('/test-client', async (req, res) => {
         const service = await getService('user-service');
         if (service) {
-          const response = await (await RabbitMQClient.toClient()).clientProduce(service, req.body);
+          const response = await RabbitMQClient.clientProduce(service, req.body);
           return res.json(response);
         }
         return res.json({ error: 404 });

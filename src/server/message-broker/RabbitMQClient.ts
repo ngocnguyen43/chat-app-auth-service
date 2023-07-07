@@ -47,7 +47,15 @@ class RabbitMQClient implements IRabbitMQClient {
         const { queue: replyQueue } = await this.serverConsumerChanel.assertQueue(name, { exclusive: true });
         this.serverProducer = new Producer(this.serverProducerChannel, replyQueue);
         this.serverConsumer = new Consumer(this.serverConsumerChanel, replyQueue);
-        this.serverConsumer.clientComsumeMessage();
+        this.serverConsumer.serverComsumeMessage();
+
+        this.clientProducerChannel = await this.connection.createChannel();
+        this.clientConsumerChanel = await this.connection.createChannel();
+        const { queue: clientReplyQueue } = await this.clientConsumerChanel.assertQueue('', { exclusive: true });
+        this.eventEmitter = new EventEmitter();
+        this.clientProducer = new Producer(this.clientProducerChannel, clientReplyQueue, this.eventEmitter);
+        this.clientConsumer = new Consumer(this.clientConsumerChanel, clientReplyQueue, this.eventEmitter);
+        this.clientConsumer.clientComsumeMessage();
 
         this.isInitialized = true;
       }
@@ -60,7 +68,7 @@ class RabbitMQClient implements IRabbitMQClient {
       logger.error('rabbitMQ connection error');
       return;
     }
-    return await this.clientProduce(target, data);
+    return await this.clientProducer.clientProduceMessages(target, data);
   }
   serverProduce = async (data: any, correlationId?: string, replyToQueue?: string) => {
     if (!this.connection) {
