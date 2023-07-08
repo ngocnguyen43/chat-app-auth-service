@@ -8,6 +8,7 @@ import { logger } from '../common/logger';
 export interface IRabbitMQClient {
   initialize: (name: string) => Promise<void>;
 }
+const EXCHANGE_NAME = 'm-broker';
 class RabbitMQClient implements IRabbitMQClient {
   private constructor() {}
 
@@ -24,6 +25,9 @@ class RabbitMQClient implements IRabbitMQClient {
   private serverConsumer: Consumer;
   private serverProducerChannel: Channel;
   private serverConsumerChanel: Channel;
+
+  private receiveChanel: Channel;
+  private emitChanel: Channel;
 
   private eventEmitter: EventEmitter;
 
@@ -57,6 +61,12 @@ class RabbitMQClient implements IRabbitMQClient {
         this.clientConsumer = new Consumer(this.clientConsumerChanel, clientReplyQueue, this.eventEmitter);
         this.clientConsumer.clientComsumeMessage();
 
+        this.receiveChanel = await this.connection.createChannel();
+        this.emitChanel = await this.connection.createChannel();
+
+        this.receiveChanel.assertExchange(EXCHANGE_NAME, 'direct');
+        this.emitChanel.assertExchange(EXCHANGE_NAME, 'direct');
+
         this.isInitialized = true;
       }
     } catch (error) {
@@ -77,15 +87,17 @@ class RabbitMQClient implements IRabbitMQClient {
     }
     return await this.serverProducer.serverProduceMessage(data, correlationId, replyToQueue);
   };
-  toClient = async () => {
-    this.clientProducerChannel = await this.connection.createChannel();
-    this.clientConsumerChanel = await this.connection.createChannel();
-    const { queue: replyQueue } = await this.clientConsumerChanel.assertQueue('', { exclusive: true });
-    this.eventEmitter = new EventEmitter();
-    this.clientProducer = new Producer(this.clientProducerChannel, replyQueue, this.eventEmitter);
-    this.clientConsumer = new Consumer(this.clientConsumerChanel, replyQueue, this.eventEmitter);
-    this.clientConsumer.clientComsumeMessage();
-    return this;
-  };
+  async receiveMessage() {
+    const q = await this.receiveChanel.assertQueue('auth-service-queue');
+    await this.receiveChanel.bindQueue(q.queue, EXCHANGE_NAME, '');
+
+    this.receiveChanel.consume(
+      q.queue,
+      (msg) => {
+        console.log(` [x] ${msg.fields.routingKey}: '${msg.content.toString()}'`);
+      },
+      { noAck: true },
+    );
+  }
 }
 export default RabbitMQClient.getInstance();

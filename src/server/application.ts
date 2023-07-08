@@ -4,7 +4,7 @@ import './auth/v1';
 import compression from 'compression';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
-import express from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { InversifyExpressServer } from 'inversify-express-utils';
 import morgan from 'morgan';
@@ -15,7 +15,8 @@ import { config } from '../config';
 import { container } from './container';
 import { AbstractApplication } from './libs/base-application';
 import { RabbitMQClient } from './message-broker';
-import { getService, logger } from './common';
+import { logger } from './common';
+import { BaseError, NotFound } from './libs/base-exception';
 dotenv.config();
 export class Application extends AbstractApplication {
   constructor(
@@ -44,17 +45,23 @@ export class Application extends AbstractApplication {
           // credentials: true,
         }),
       );
-      app.get('/test-client', async (req, res) => {
-        const service = await getService('user-service');
-        if (service) {
-          const response = await RabbitMQClient.clientProduce(service, req.body);
-          return res.json(response);
-        }
-        return res.json({ error: 404 });
+      // app.use((_: Request, res: Response, next: NextFunction) => {
+      //   const error = new NotFound();
+      //   next(error);
+      // });
+    });
+    server.setErrorConfig((app) => {
+      app.use((error: BaseError, _: Request, res: Response, next: NextFunction) => {
+        logger.error(error.message);
+        return res.status(error.statusCode).json({
+          status_code: error.statusCode || 500,
+          message: error.message || 'internal server error',
+        });
       });
     });
 
     const app = server.build();
+    RabbitMQClient.receiveMessage();
     app.listen(config.port, () => {
       console.log(`App is running in port ${config.port}`);
       this.registerConsul();

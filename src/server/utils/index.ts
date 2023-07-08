@@ -75,3 +75,4 @@ export function start() {
     console.log('[AMQP] connected');
   });
 }
+export * from './contants';
