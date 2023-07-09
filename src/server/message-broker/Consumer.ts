@@ -1,5 +1,6 @@
 import { Channel, Message } from 'amqplib';
 import EventEmitter from 'events';
+
 import { MessageHandler } from './Messagehandler';
 
 export class Consumer {

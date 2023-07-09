@@ -1,4 +1,5 @@
-import amqp, { Connection, connect } from 'amqplib';
+import amqp, { connect, Connection } from 'amqplib';
+
 import { config } from '../config';
 
 export async function sleep(ms: number) {

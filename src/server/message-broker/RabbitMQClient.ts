@@ -1,10 +1,11 @@
 import { Channel, connect, Connection, Replies } from 'amqplib';
 import EventEmitter from 'events';
 
+import { logger } from '../common/logger';
 import { config } from '../config';
 import { Consumer } from './Consumer';
 import { Producer } from './Producer';
-import { logger } from '../common/logger';
+
 export interface IRabbitMQClient {
   initialize: (name: string) => Promise<void>;
 }

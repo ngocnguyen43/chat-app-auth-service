@@ -2,21 +2,23 @@ import 'reflect-metadata';
 import './auth/v1';
 
 import compression from 'compression';
+import Consul, { ConsulOptions } from 'consul';
 import cors from 'cors';
+import { randomUUID } from 'crypto';
 import * as dotenv from 'dotenv';
 import express, { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { InversifyExpressServer } from 'inversify-express-utils';
 import morgan from 'morgan';
-import Consul, { ConsulOptions } from 'consul';
 import os from 'os';
-import { randomUUID } from 'crypto';
+
 import { config } from '../config';
+import { getService, logger } from './common';
 import { container } from './container';
 import { AbstractApplication } from './libs/base-application';
+import { BaseError, NotFound } from './libs/base-exception';
 import { RabbitMQClient } from './message-broker';
-import { getService, logger } from './common';
-import { BaseError } from './libs/base-exception';
+
 dotenv.config();
 export class Application extends AbstractApplication {
   constructor(
@@ -50,18 +52,17 @@ export class Application extends AbstractApplication {
         if (target) {
           RabbitMQClient.messageProduce(target, { hello: 'ok' });
         }
-
         return res.json({ ok: 'ok' });
       });
-      // app.use((_: Request, res: Response, next: NextFunction) => {
-      //   const error = new NotFound();
-      //   next(error);
-      // });
     });
     server.setErrorConfig((app) => {
+      app.use((_: Request, res: Response, next: NextFunction) => {
+        const error = new NotFound();
+        next(error);
+      });
       app.use((error: BaseError, _: Request, res: Response, next: NextFunction) => {
         logger.error(error.message);
-        return res.status(error.statusCode).json({
+        return res.status(error.statusCode || 500).json({
           status_code: error.statusCode || 500,
           message: error.message || 'internal server error',
         });
@@ -71,11 +72,7 @@ export class Application extends AbstractApplication {
     const app = server.build();
     app.listen(config.port, () => {
       console.log(`App is running in port ${config.port}`);
-      try {
-        RabbitMQClient.initialize(this.CONSUL_ID);
-      } catch (error) {
-        console.log(error);
-      }
+      RabbitMQClient.initialize(this.CONSUL_ID);
       this.registerConsul();
     });
   }

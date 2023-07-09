@@ -1,7 +1,9 @@
-import winston from 'winston';
-import { config } from '../config';
 import fs from 'fs';
 import path from 'path';
+import winston from 'winston';
+
+import { config } from '../config';
+
 const logDir = 'src/server/log'; // directory path you want to set
 if (!fs.existsSync(logDir)) {
   // Create the directory if it does not exist

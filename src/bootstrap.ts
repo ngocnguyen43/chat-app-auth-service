@@ -1,4 +1,5 @@
 import { Application } from './server/application';
+
 console.clear();
 
 export function boostrap() {

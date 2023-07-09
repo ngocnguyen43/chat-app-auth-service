@@ -1,20 +1,27 @@
 import { Request, Response } from 'express';
 import { inject } from 'inversify';
-import { controller, httpPost } from 'inversify-express-utils';
+import {
+    controller, httpPost, requestBody, requestHeaders, response
+} from 'inversify-express-utils';
 
+import { getService } from '../../../common';
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuhtService } from '../service/auth.service';
 import { TYPES } from '../types';
-import { getService } from '../../../common';
+
+class UserDto {
+  name: string;
+}
 
 @controller('/api/v1/auth')
 export class AuthController {
   private rabbitMq = RabbitMQClient;
   constructor(@inject(TYPES.AuthService) private readonly _service: IAuhtService) {}
-  @httpPost('/register')
-  async GetAll(req: Request, res: Response) {
-    const resposne = await this._service.PasswordLogin();
-    return res.json(resposne);
+  @httpPost('/register', TYPES.Middleware)
+  async Register(@requestBody() user: UserDto, @response() res: Response) {
+    //const resposne = await this._service.PasswordLogin();
+
+    return res.json(await this._service.Registration());
   }
   @httpPost('/login-google')
   async LoginGoogle(req: Request, res: Response) {
