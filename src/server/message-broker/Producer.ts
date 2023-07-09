@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import EventEmitter from 'events';
 
 export class Producer {
-  constructor(private chanel: Channel, private replyQueue: string, private eventEmitter?: EventEmitter) {}
+  constructor(private chanel: Channel, private replyQueue?: string, private eventEmitter?: EventEmitter) {}
   async clientProduceMessages(target: string, message: any) {
     const uuid = randomUUID();
     console.log('correId::::::', uuid);
@@ -23,5 +23,8 @@ export class Producer {
     this.chanel.sendToQueue(replyToQueue, Buffer.from(JSON.stringify(message)), {
       correlationId: correlationId,
     });
+  }
+  noReplyProduce(message: any, replyToQueue: string) {
+    this.chanel.sendToQueue(replyToQueue, Buffer.from(JSON.stringify(message)));
   }
 }

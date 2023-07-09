@@ -15,8 +15,8 @@ import { config } from '../config';
 import { container } from './container';
 import { AbstractApplication } from './libs/base-application';
 import { RabbitMQClient } from './message-broker';
-import { logger } from './common';
-import { BaseError, NotFound } from './libs/base-exception';
+import { getService, logger } from './common';
+import { BaseError } from './libs/base-exception';
 dotenv.config();
 export class Application extends AbstractApplication {
   constructor(
@@ -45,6 +45,14 @@ export class Application extends AbstractApplication {
           // credentials: true,
         }),
       );
+      app.get('/test', async (req, res) => {
+        const target = await getService('user-service');
+        if (target) {
+          RabbitMQClient.messageProduce(target, { hello: 'ok' });
+        }
+
+        return res.json({ ok: 'ok' });
+      });
       // app.use((_: Request, res: Response, next: NextFunction) => {
       //   const error = new NotFound();
       //   next(error);
@@ -61,11 +69,14 @@ export class Application extends AbstractApplication {
     });
 
     const app = server.build();
-    RabbitMQClient.receiveMessage();
     app.listen(config.port, () => {
       console.log(`App is running in port ${config.port}`);
+      try {
+        RabbitMQClient.initialize(this.CONSUL_ID);
+      } catch (error) {
+        console.log(error);
+      }
       this.registerConsul();
-      RabbitMQClient.initialize(this.CONSUL_ID);
     });
   }
   registerConsul() {

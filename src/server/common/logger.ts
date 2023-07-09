@@ -10,7 +10,7 @@ if (!fs.existsSync(logDir)) {
 export const logger = winston.createLogger({
   level: 'info',
   // format: winston.format.json(),
-  defaultMeta: { service: 'user-service' },
+  defaultMeta: { service: 'auth-service' },
   transports: [
     //
     // - Write all logs with importance level of `error` or less to `error.log`

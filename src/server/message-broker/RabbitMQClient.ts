@@ -1,4 +1,4 @@
-import { Channel, connect, Connection } from 'amqplib';
+import { Channel, connect, Connection, Replies } from 'amqplib';
 import EventEmitter from 'events';
 
 import { config } from '../config';
@@ -26,9 +26,13 @@ class RabbitMQClient implements IRabbitMQClient {
   private serverProducerChannel: Channel;
   private serverConsumerChanel: Channel;
 
-  private receiveChanel: Channel;
+  private messageChanel: Channel;
   private emitChanel: Channel;
 
+  private messageConsumer: Consumer;
+  private messageProducer: Producer;
+
+  private q: Replies.AssertQueue;
   private eventEmitter: EventEmitter;
 
   public static getInstance() {
@@ -61,12 +65,9 @@ class RabbitMQClient implements IRabbitMQClient {
         this.clientConsumer = new Consumer(this.clientConsumerChanel, clientReplyQueue, this.eventEmitter);
         this.clientConsumer.clientComsumeMessage();
 
-        this.receiveChanel = await this.connection.createChannel();
-        this.emitChanel = await this.connection.createChannel();
-
-        this.receiveChanel.assertExchange(EXCHANGE_NAME, 'direct');
-        this.emitChanel.assertExchange(EXCHANGE_NAME, 'direct');
-
+        this.messageChanel = await this.connection.createChannel();
+        this.messageConsumer = new Consumer(this.messageChanel);
+        this.messageProducer = new Producer(this.messageChanel);
         this.isInitialized = true;
       }
     } catch (error) {
@@ -87,17 +88,16 @@ class RabbitMQClient implements IRabbitMQClient {
     }
     return await this.serverProducer.serverProduceMessage(data, correlationId, replyToQueue);
   };
-  async receiveMessage() {
-    const q = await this.receiveChanel.assertQueue('auth-service-queue');
-    await this.receiveChanel.bindQueue(q.queue, EXCHANGE_NAME, '');
-
-    this.receiveChanel.consume(
-      q.queue,
-      (msg) => {
-        console.log(` [x] ${msg.fields.routingKey}: '${msg.content.toString()}'`);
-      },
-      { noAck: true },
-    );
+  messageProduce(target: string, data: any) {
+    if (!this.connection) {
+      logger.error('rabbitMQ connection error');
+      return;
+    }
+    try {
+      return this.messageProducer.noReplyProduce(data, target);
+    } catch (error) {
+      console.log(error);
+    }
   }
 }
 export default RabbitMQClient.getInstance();

@@ -3,7 +3,7 @@ import EventEmitter from 'events';
 import { MessageHandler } from './Messagehandler';
 
 export class Consumer {
-  constructor(private chanel: Channel, private replyQueue: string, private eventEmitter?: EventEmitter) {}
+  constructor(private chanel: Channel, private replyQueue?: string, private eventEmitter?: EventEmitter) {}
   async clientComsumeMessage() {
     this.chanel.consume(
       this.replyQueue,
@@ -20,7 +20,7 @@ export class Consumer {
       (message: Message) => {
         (async () => {
           const { correlationId, replyTo } = message.properties;
-          console.log(message.properties);
+          console.log(message.content.toString());
           if (!correlationId || !replyTo) {
             console.log('Missing some properties...');
           }
