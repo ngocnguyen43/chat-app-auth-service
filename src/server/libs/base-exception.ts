@@ -10,3 +10,8 @@ export class NotFound extends BaseError {
     super(StatusCode.NOT_FOUND, Reasons.NOT_FOUND);
   }
 }
+export class InternalError extends BaseError {
+  constructor() {
+    super(StatusCode.INTERNAL_SERVER_ERROR, Reasons.INTERNAL_SERVER_ERROR);
+  }
+}

@@ -1,5 +1,5 @@
-import amqp, { connect, Connection } from 'amqplib';
-
+import { connect, Connection } from 'amqplib';
+import bcrypt from 'bcrypt';
 import { config } from '../config';
 
 export async function sleep(ms: number) {
@@ -77,3 +77,19 @@ export function start() {
   });
 }
 export * from './contants';
+export const encode = async (password: string) => {
+  const salt = await bcrypt.genSalt(10);
+  return await bcrypt.hash(password, salt);
+};
+export const decode = async (password: string, hash: string) => {
+  return await bcrypt.compare(password, hash).then((res) => res == true);
+};
+export const Options = (arr: any[]) => {
+  let obj = {
+    password: true,
+  };
+  arr.forEach((item) => {
+    obj[item.option] = true;
+  });
+  return obj;
+};

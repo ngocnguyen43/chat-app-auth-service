@@ -4,7 +4,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { DefaultArgs } from '@prisma/client/runtime';
 
 import { AuthRepository, AuthService, IAuhtService, IAuthRepository, TYPES } from './auth/v1';
-import { RegisterMiddleware } from './auth/v1/middleware/RegisterMiddleware';
+import { RequestValidator } from './auth/v1/middleware';
 import { prisma } from './config';
 
 const thirdPartyDependencies = new ContainerModule((bind) => {
@@ -17,7 +17,7 @@ const thirdPartyDependencies = new ContainerModule((bind) => {
 const applicationDependencies = new ContainerModule((bind) => {
   bind<IAuthRepository>(TYPES.AuthRepository).to(AuthRepository);
   bind<IAuhtService>(TYPES.AuthService).to(AuthService);
-  bind<RegisterMiddleware>(TYPES.Middleware).to(RegisterMiddleware);
+  bind<RequestValidator>(RequestValidator).toSelf();
   // ..
 });
 export const container = new Container({
