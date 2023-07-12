@@ -13,4 +13,23 @@ declare module '@v1' {
   export interface ILoginOptionsDto {
     email: string;
   }
+  interface IAddGoogleDto {
+    id: string;
+    email: string;
+    aud: string;
+  }
+  type OAuthType = 'google' | 'facebook' | 'github';
+  interface IGoogleLoginId {
+    credential: string;
+  }
+  interface IWebAuthnRegisterOptions {
+    email: string;
+  }
+  interface IWebAuthnLoginOptions {
+    email: string;
+  }
+  interface IWebAuthnLoginVerification {
+    email: string;
+    data: any;
+  }
 }

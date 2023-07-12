@@ -8,7 +8,14 @@ import { IAuhtService } from '../service/auth.service';
 import { TYPES } from '../types';
 import { randomUUID } from 'crypto';
 import { Middlewares, RequestValidator } from '../middleware';
-import { ILoginOptionsDto, IPasswordLoginDto } from '@v1';
+import {
+  IGoogleLoginId,
+  ILoginOptionsDto,
+  IPasswordLoginDto,
+  IWebAuthnLoginOptions,
+  IWebAuthnLoginVerification,
+  IWebAuthnRegisterOptions,
+} from '@v1';
 
 export interface RegisterDto {
   userId: string;
@@ -47,7 +54,26 @@ export class AuthController {
     return res.json(await this._service.PasswordLogin(dto));
   }
   @httpPost('/login-google-id')
-  async LoginGoogleId(req: Request, res: Response) {}
+  async LoginGoogleId(@requestBody() dto: IGoogleLoginId, @response() res: Response) {
+    return res.json(await this._service.GoogleLogin(dto.credential));
+  }
   @httpPost('/webauth-registration-options')
-  async WebAuthnRegistrationOptions(req: Request, res: Response) {}
+  async WebAuthnRegistrationOptions(@requestBody() dto: IWebAuthnRegisterOptions, @response() res: Response) {
+    console.log(dto);
+    return res.json(await this._service.WebAuthnRegistrationOptions(dto.email));
+  }
+  @httpPost('/webauth-registration-verification')
+  async WebAuthnRegistrationVerification(@requestBody() dto: any, @response() res: Response) {
+    console.log(dto);
+    return res.json(await this._service.WebAuthnRegistrationVerification(dto['data']));
+  }
+  @httpPost('/webauth-login-options')
+  async WebAuthnLoginOptions(@requestBody() dto: IWebAuthnLoginOptions, @response() res: Response) {
+    return res.json(await this._service.WebAuthnLoginOptions(dto.email));
+  }
+  @httpPost('/webauth-login-verification')
+  async WebAuthnLoginVerification(@requestBody() dto: IWebAuthnLoginVerification, @response() res: Response) {
+    console.log(dto.email);
+    return res.json(await this._service.WebAuthnLoginVerification(dto.email, dto.data));
+  }
 }

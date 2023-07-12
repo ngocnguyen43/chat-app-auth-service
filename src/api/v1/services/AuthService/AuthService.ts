@@ -2,10 +2,16 @@ import base64url from 'base64url';
 import jwt, { UserJWTPayload } from 'jsonwebtoken';
 
 import {
-    generateAuthenticationOptions, GenerateAuthenticationOptionsOpts, generateRegistrationOptions,
-    GenerateRegistrationOptionsOpts, VerifiedAuthenticationResponse, VerifiedRegistrationResponse,
-    verifyAuthenticationResponse, VerifyAuthenticationResponseOpts, verifyRegistrationResponse,
-    VerifyRegistrationResponseOpts
+  generateAuthenticationOptions,
+  GenerateAuthenticationOptionsOpts,
+  generateRegistrationOptions,
+  GenerateRegistrationOptionsOpts,
+  VerifiedAuthenticationResponse,
+  VerifiedRegistrationResponse,
+  verifyAuthenticationResponse,
+  VerifyAuthenticationResponseOpts,
+  verifyRegistrationResponse,
+  VerifyRegistrationResponseOpts,
 } from '@simplewebauthn/server';
 import { LogInDto, RegistrationDto, userGoogleLoginDto } from '@v1/interface';
 
