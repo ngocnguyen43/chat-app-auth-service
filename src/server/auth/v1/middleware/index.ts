@@ -21,7 +21,7 @@ export const Middlewares = {
   postRegisterCheck: [
     body('email').trim().isEmail().notEmpty().withMessage('Email is required'),
     body('fullName').notEmpty().withMessage('fullname is required'),
-    body('user name').notEmpty().withMessage('username is required'),
+    body('userName').notEmpty().withMessage('username is required'),
     body('password').exists().isLength({ min: 8 }).notEmpty().withMessage('password is required'),
   ],
 };

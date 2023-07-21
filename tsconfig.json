@@ -41,5 +41,5 @@
     "strictPropertyInitialization": false
   },
   "include": ["src/**/*.d.ts", "src/**/*.ts"],
-  "files": ["./src/index.d.ts", "src/api/v1/@types/type.d.ts", "src/server/auth/v1/types/index.d.ts"]
+  "files": ["./src/index.d.ts", "src/server/auth/v1/types/index.d.ts"]
 }

@@ -72,7 +72,7 @@ export class Application extends AbstractApplication {
     const app = server.build();
     app.listen(config.port, () => {
       console.log(`App is running in port ${config.port}`);
-      RabbitMQClient.initialize(this.CONSUL_ID);
+      RabbitMQClient.initialize('auth-queue');
       this.registerConsul();
     });
   }

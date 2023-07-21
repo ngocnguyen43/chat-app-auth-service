@@ -51,6 +51,7 @@ export interface IAuhtService {
   WebAuthnRegistrationVerification(credential: any): Promise<any>;
   WebAuthnLoginOptions(email: string): Promise<any>;
   WebAuthnLoginVerification(email: string, data: any): Promise<any>;
+  Test(): Promise<any>;
 }
 interface IMessageResponse {
   code: number;
@@ -61,6 +62,10 @@ type ValidOption = [object[], string];
 @injectable()
 export class AuthService implements IAuhtService {
   constructor(@inject(TYPES.AuthRepository) private readonly _repo: IAuthRepository) {}
+  async Test(): Promise<any> {
+    const target = await getService('user-service');
+    return await RabbitMQClient.clientProduce(target, { type: 'test' });
+  }
   private checkValidOption(value: ValidOption, federation: ValidOption) {
     return (
       value[0].some((item) => item.hasOwnProperty(value[1])) &&
@@ -339,7 +344,6 @@ export class AuthService implements IAuhtService {
     const user = await this._repo.GetUserById(userId);
     const expectedChallenge = user.currentChallenge;
     let dbAuthenticator;
-    console.log(data);
     const bodyCredIDBuffer = base64url.toBuffer(data['rawId']);
     // console.log(data);
     for (const device of authn.key['devices']) {

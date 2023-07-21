@@ -5,12 +5,13 @@
   "main": "server.ts",
   "scripts": {
     "clean": "node ./node_modules/rimraf/bin.js dist",
-    "dev": "cls && set STAGE=dev && ts-node-dev src/bootstrap.ts",
-    "prod": "cls && set STAGE=production && ts-node-dev src/bootstrap.ts",
+    "dev": "cls && set STAGE=dev&& ts-node-dev src/bootstrap.ts",
+    "prod": "cls && set STAGE=production&& ts-node-dev src/bootstrap.ts",
     "test": "jest",
     "debug": "nodemon",
     "build": "node ./node_modules/typescript/bin/tsc",
-    "start": "npm run clean && npm run build && node ./dist/bootstrap.js"
+    "start": "npm run clean && npm run build && node ./dist/bootstrap.js",
+    "start:prod": "npm run clean && node ./dist/bootstrap.js"
   },
   "keywords": [],
   "author": "",

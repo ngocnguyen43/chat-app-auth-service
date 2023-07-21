@@ -27,13 +27,6 @@ class RabbitMQClient implements IRabbitMQClient {
   private serverProducerChannel: Channel;
   private serverConsumerChanel: Channel;
 
-  private messageChanel: Channel;
-  private emitChanel: Channel;
-
-  private messageConsumer: Consumer;
-  private messageProducer: Producer;
-
-  private q: Replies.AssertQueue;
   private eventEmitter: EventEmitter;
 
   public static getInstance() {
@@ -53,7 +46,7 @@ class RabbitMQClient implements IRabbitMQClient {
       if (this.connection) {
         this.serverProducerChannel = await this.connection.createChannel();
         this.serverConsumerChanel = await this.connection.createChannel();
-        const { queue: replyQueue } = await this.serverConsumerChanel.assertQueue(name, { exclusive: true });
+        const { queue: replyQueue } = await this.serverConsumerChanel.assertQueue(name, { autoDelete: true });
         this.serverProducer = new Producer(this.serverProducerChannel, replyQueue);
         this.serverConsumer = new Consumer(this.serverConsumerChanel, replyQueue);
         this.serverConsumer.serverComsumeMessage();
@@ -66,9 +59,6 @@ class RabbitMQClient implements IRabbitMQClient {
         this.clientConsumer = new Consumer(this.clientConsumerChanel, clientReplyQueue, this.eventEmitter);
         this.clientConsumer.clientComsumeMessage();
 
-        this.messageChanel = await this.connection.createChannel();
-        this.messageConsumer = new Consumer(this.messageChanel);
-        this.messageProducer = new Producer(this.messageChanel);
         this.isInitialized = true;
       }
     } catch (error) {
@@ -95,7 +85,7 @@ class RabbitMQClient implements IRabbitMQClient {
       return;
     }
     try {
-      return this.messageProducer.noReplyProduce(data, target);
+      return this.serverProducer.noReplyProduce(data, target);
     } catch (error) {
       console.log(error);
     }

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { inject } from 'inversify';
-import { controller, httpPost, request, requestBody, requestHeaders, response } from 'inversify-express-utils';
+import { controller, httpGet, httpPost, request, requestBody, requestHeaders, response } from 'inversify-express-utils';
 
 import { getService } from '../../../common';
 import { RabbitMQClient } from '../../../message-broker';
@@ -75,5 +75,9 @@ export class AuthController {
   async WebAuthnLoginVerification(@requestBody() dto: IWebAuthnLoginVerification, @response() res: Response) {
     console.log(dto.email);
     return res.json(await this._service.WebAuthnLoginVerification(dto.email, dto.data));
+  }
+  @httpGet('/test')
+  async Test(@response() res: Response) {
+    RabbitMQClient.messageProduce('user-queue', { type: 'test' });
   }
 }
