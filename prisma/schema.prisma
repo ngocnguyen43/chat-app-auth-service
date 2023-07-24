@@ -25,6 +25,7 @@ model User {
   updatedAt        DateTime       @updatedAt @map("updated_at")
   AuthOtions       AuthnOptions[]
   GroupUsers       GroupUsers[]
+  Tokens           Token?
 
   @@map("users")
 }
@@ -38,6 +39,19 @@ model AuthnOptions {
 
   @@index([id, userId, option])
   @@map("authn_options")
+}
+
+model Token {
+  id               String   @id @unique @default(uuid()) @map("token_id")
+  userId           String   @unique @map("user_id")
+  publicKey        String?  @map("public_key") @db.VarChar(500)
+  refreshToken     String?  @map("refresh_token") @db.VarChar(700)
+  refreshTokenUsed Json?    @map("refresh_token_used")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user User @relation(references: [id], fields: [userId], onDelete: Cascade)
+
+  @@map("tokens")
 }
 
 model GroupUsers {

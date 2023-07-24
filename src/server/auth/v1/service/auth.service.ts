@@ -7,7 +7,9 @@ import { TYPES } from '../types';
 import { RegisterDto } from '../controller/auth.controller';
 import { IPasswordLoginDto } from '@v1';
 import { InternalError, NotFound } from '../../../libs/base-exception';
-import { randomUUID } from 'crypto';
+import { generateKeyPairSync, randomUUID } from 'crypto';
+import util from 'util';
+
 import {
   GenerateAuthenticationOptionsOpts,
   GenerateRegistrationOptionsOpts,
@@ -20,7 +22,8 @@ import {
   verifyRegistrationResponse,
 } from '@simplewebauthn/server';
 import base64url from 'base64url';
-
+import { ITokenRepository } from '../repository/token.repository';
+import { decode } from '../../../utils';
 declare module 'jsonwebtoken' {
   interface UserJWTPayload extends jwt.JwtPayload {
     iss: string;
@@ -40,7 +43,7 @@ declare module 'jsonwebtoken' {
   }
 }
 export interface IAuhtService {
-  PasswordLogin(dto: IPasswordLoginDto): Promise<any>;
+  PasswordLogin(dto: IPasswordLoginDto, token: string): Promise<any>;
   Registration(dto: RegisterDto): Promise<any>;
   GoogleLogin(creadential: string): Promise<any>;
   GithubLogin(): Promise<any>;
@@ -51,6 +54,7 @@ export interface IAuhtService {
   WebAuthnRegistrationVerification(credential: any): Promise<any>;
   WebAuthnLoginOptions(email: string): Promise<any>;
   WebAuthnLoginVerification(email: string, data: any): Promise<any>;
+  RefreshToken(email: string, refershToken: string): Promise<any>;
   Test(): Promise<any>;
 }
 interface IMessageResponse {
@@ -59,12 +63,48 @@ interface IMessageResponse {
   payload: any;
 }
 type ValidOption = [object[], string];
+export const verifyPromise = () => {
+  util.promisify(jwt.verify);
+};
+
 @injectable()
 export class AuthService implements IAuhtService {
-  constructor(@inject(TYPES.AuthRepository) private readonly _repo: IAuthRepository) {}
+  constructor(
+    @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
+    @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
+  ) {}
+  async RefreshToken(email: string, refershToken: string): Promise<any> {
+    const res = (await RabbitMQClient.clientProduce('user-queue', {
+      type: 'get-user-by-email',
+      payload: { email: email },
+    })) as IMessageResponse;
+    if (res.code !== 1200) {
+      throw new NotFound();
+    }
+    const tokens = await this._tokenRepo.FindTokensByUserId(res.payload['userId']);
+    try {
+      const verify = jwt.verify(refershToken, tokens.publicKey);
+      console.log(verify);
+      return verify;
+    } catch (error) {
+      console.log(error['message']);
+      return { err: 'err' };
+    }
+  }
   async Test(): Promise<any> {
-    const target = await getService('user-service');
-    return await RabbitMQClient.clientProduce(target, { type: 'test' });
+    const { privateKey, publicKey } = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: {
+        type: 'pkcs1',
+        format: 'pem',
+      },
+      privateKeyEncoding: {
+        type: 'pkcs1',
+        format: 'pem',
+      },
+    });
+    const token = jwt.sign('hello', publicKey, { algorithm: 'RS256' });
+    return { token: token };
   }
   private checkValidOption(value: ValidOption, federation: ValidOption) {
     return (
@@ -72,51 +112,63 @@ export class AuthService implements IAuhtService {
       federation[0].some((item) => item.hasOwnProperty(federation[1]))
     );
   }
-  async PasswordLogin(dto: IPasswordLoginDto) {
-    const target = await getService('user-service');
-    if (target) {
-      const res = (await RabbitMQClient.clientProduce(target, {
-        type: 'get-user-by-email',
-        payload: { email: dto.email },
-      })) as IMessageResponse;
-      if (res.code !== 1200) {
-        throw new NotFound();
+  async PasswordLogin(dto: IPasswordLoginDto, refresh: string) {
+    const res = (await RabbitMQClient.clientProduce('user-queue', {
+      type: 'get-user-by-email',
+      payload: { email: dto.email },
+    })) as IMessageResponse;
+    if (res.code !== 1200) {
+      throw new NotFound();
+    }
+    try {
+      const decoded = await this._authRepo.FindPasswordByUserId(res.payload['userId']);
+      if (decoded) {
+        const isSimilar = await decode(dto.password, decoded);
+        if (!isSimilar) {
+          return { message: 'wrong password' };
+        }
+        const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+        const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload, privateKey);
+        await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+        return { ok: 'OK', accessToken, refreshToken };
       }
-      // console.log(res);
-      // return res;
-      return await this._repo.PasswordLogin({ id: res.payload['userId'] as string, password: dto.password });
-    } else {
-      return { error: '' };
+      return { ok: 'nah' };
+    } catch (error) {
+      console.log(error);
+      return { ok: 'not ok' };
     }
   }
   async Registration(dto: RegisterDto) {
-    const target = await getService('user-service');
-    if (target) {
-      const res = (await RabbitMQClient.clientProduce(target, {
-        type: 'get-user-by-email',
-        payload: { email: dto.email },
-      })) as IMessageResponse;
-      if (res.code != 1200) {
-        try {
-          await this._repo.CreateOne({ id: dto.userId });
-          await this._repo.AddPassword({ id: dto.userId, pasword: dto.password });
-          RabbitMQClient.messageProduce(target, {
-            type: 'add-user',
-            payload: {
-              userId: dto.userId,
-              email: dto.email,
-              userName: dto.userName,
-              fullName: dto.fullName,
-            },
-          });
-          return { message: 'success' };
-        } catch (error) {
-          logger.error(error['message']);
-        }
+    const res = (await RabbitMQClient.clientProduce('user-queue', {
+      type: 'get-user-by-email',
+      payload: { email: dto.email },
+    })) as IMessageResponse;
+    if (res.code != 1200) {
+      try {
+        await this._authRepo.CreateOne({ id: dto.userId });
+        await this._authRepo.AddPassword({ id: dto.userId, pasword: dto.password });
+        RabbitMQClient.messageProduce('user-queue', {
+          type: 'add-user',
+          payload: {
+            userId: dto.userId,
+            email: dto.email,
+            userName: dto.userName,
+            fullName: dto.fullName,
+          },
+        });
+        RabbitMQClient.messageProduce('chat-queue', {
+          type: 'add-user',
+          payload: {
+            userId: dto.userId,
+            fullName: dto.fullName,
+          },
+        });
+        return { message: 'success' };
+      } catch (error) {
+        logger.error(error['message']);
       }
-      return { message: 'conflict' };
     }
-    return { err: 'not ok' };
+    return { message: 'conflict' };
   }
   async GoogleLogin(credential: string) {
     const decoded = jwt.decode(credential) as UserJWTPayload;
@@ -140,9 +192,9 @@ export class AuthService implements IAuhtService {
           },
         });
         //add user
-        await this._repo.CreateOne({ id: userId });
+        await this._authRepo.CreateOne({ id: userId });
         //add google in authn_opotions
-        await this._repo.AddGoogle({ id: userId, email: decoded.email, aud: decoded.aud });
+        await this._authRepo.AddGoogle({ id: userId, email: decoded.email, aud: decoded.aud });
         //return
         return { fullname: decoded.given_name + ' ' + decoded.family_name, email: decoded.email };
       } catch (error) {
@@ -151,11 +203,11 @@ export class AuthService implements IAuhtService {
       }
     }
 
-    const option = await this._repo.FindOneWithKeyValue(res.payload['userId'], 'google', 'oauth');
+    const option = await this._authRepo.FindOneWithKeyValue(res.payload['userId'], 'google', 'oauth');
     if (option && this.checkValidOption([option.key['value'], 'google'], [option.key['federated'], 'google'])) {
       return { fullname: decoded.family_name + decoded.given_name, email: decoded.email };
     }
-    await this._repo.AddGoogle({ id: res.payload['userId'], email: decoded.email, aud: decoded.aud });
+    await this._authRepo.AddGoogle({ id: res.payload['userId'], email: decoded.email, aud: decoded.aud });
     return { fullname: decoded.family_name + decoded.given_name, email: decoded.email };
   }
   GithubLogin = async () => {};
@@ -176,7 +228,7 @@ export class AuthService implements IAuhtService {
             },
           };
         }
-        return { opts: await this._repo.LoginOptions(res.payload['userId']) };
+        return { opts: await this._authRepo.LoginOptions(res.payload['userId']) };
       } else {
         throw new InternalError();
       }
@@ -199,7 +251,7 @@ export class AuthService implements IAuhtService {
     if (res.code !== 1200) {
       throw new InternalError();
     }
-    const authn = await this._repo.FindOneByUserId(res.payload['userId'], 'passkey');
+    const authn = await this._authRepo.FindOneByUserId(res.payload['userId'], 'passkey');
     const options: GenerateRegistrationOptionsOpts = {
       rpName: 'Chat App',
       rpID: 'localhost',
@@ -221,7 +273,7 @@ export class AuthService implements IAuhtService {
       supportedAlgorithmIDs: [-7, -257],
     };
     const regOptions = generateRegistrationOptions(options);
-    await this._repo.AddChallenge(res.payload['userId'], regOptions.challenge);
+    await this._authRepo.AddChallenge(res.payload['userId'], regOptions.challenge);
     return regOptions;
   }
   async WebAuthnRegistrationVerification(credential: any) {
@@ -239,8 +291,8 @@ export class AuthService implements IAuhtService {
       }
       const userId = res.payload['userId'];
       const data = credential['loginRes'];
-      const auth = await this._repo.FindOneByUserId(userId, 'passkey');
-      const user = await this._repo.GetUserById(userId);
+      const auth = await this._authRepo.FindOneByUserId(userId, 'passkey');
+      const user = await this._authRepo.GetUserById(userId);
       const expectedChallenge = user.currentChallenge;
       let verification: VerifiedRegistrationResponse;
       const options = {
@@ -265,7 +317,7 @@ export class AuthService implements IAuhtService {
             counter,
             transports: data.response.transports,
           };
-          await this._repo.CreateDevice(userId, newDevice);
+          await this._authRepo.CreateDevice(userId, newDevice);
           console.log(newDevice);
         } else {
           if (!existingDevice) {
@@ -275,7 +327,7 @@ export class AuthService implements IAuhtService {
               counter,
               transports: data.response.transports,
             };
-            await this._repo.AddDevice(auth.id, userId, newDevice);
+            await this._authRepo.AddDevice(auth.id, userId, newDevice);
             console.log(newDevice);
           }
         }
@@ -301,7 +353,7 @@ export class AuthService implements IAuhtService {
       if (res.code !== 1200) {
         throw new InternalError();
       }
-      const authn = await this._repo.FindOneByUserId(res.payload['userId'], 'passkey');
+      const authn = await this._authRepo.FindOneByUserId(res.payload['userId'], 'passkey');
       const options: GenerateAuthenticationOptionsOpts = {
         timeout: 60000,
         allowCredentials: authn
@@ -318,7 +370,7 @@ export class AuthService implements IAuhtService {
       };
       const loginOpts = generateAuthenticationOptions(options);
       const challenge = loginOpts.challenge;
-      await this._repo.AddChallenge(res.payload['userId'], challenge);
+      await this._authRepo.AddChallenge(res.payload['userId'], challenge);
       return loginOpts;
     } catch (error) {
       console.log(error);
@@ -340,8 +392,8 @@ export class AuthService implements IAuhtService {
       throw new InternalError();
     }
     const userId = res.payload['userId'];
-    const authn = await this._repo.FindOneByUserId(userId, 'passkey');
-    const user = await this._repo.GetUserById(userId);
+    const authn = await this._authRepo.FindOneByUserId(userId, 'passkey');
+    const user = await this._authRepo.GetUserById(userId);
     const expectedChallenge = user.currentChallenge;
     let dbAuthenticator;
     const bodyCredIDBuffer = base64url.toBuffer(data['rawId']);
@@ -380,7 +432,7 @@ export class AuthService implements IAuhtService {
     // console.log(Buffer.from(passkeys.at(1)['credentialID']).equals(bodyCredIDBuffer));
     // console.log(bodyCredIDBuffer);
     if (verified) {
-      await this._repo.UpdatePasskeyCounter(authn.id, user.id, data['rawId'], authenticationInfo.newCounter);
+      await this._authRepo.UpdatePasskeyCounter(authn.id, user.id, data['rawId'], authenticationInfo.newCounter);
     }
     return { ok: true };
   }

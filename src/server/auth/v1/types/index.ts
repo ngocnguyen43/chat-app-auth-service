@@ -4,6 +4,7 @@ const TYPES = {
   AuthService: Symbol.for('AuthService'),
   AuthRepository: Symbol.for('AuthRepository'),
   AuthController: Symbol.for('AuthController'),
+  TokenRepository: Symbol.for('TokenRepository'),
   Middleware: Symbol.for('middleware'),
 };
 export interface IEnvironment {

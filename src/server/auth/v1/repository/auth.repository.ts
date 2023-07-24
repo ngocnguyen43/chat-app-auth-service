@@ -8,6 +8,8 @@ import { AuthCreateDto, AuthnPasswordDto, IAddGoogleDto, OAuthType } from '@v1';
 import { Options, decode, encode } from '../../../utils';
 import { InternalError, NotFound } from '../../../libs/base-exception';
 import { AuthnOptions, User } from '../../../config';
+import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import base64url from 'base64url';
 
 export interface IAuthRepository {
@@ -24,6 +26,7 @@ export interface IAuthRepository {
   AddDevice(id: string, userId: string, device: any): Promise<void>;
   FindPasskeys(id: string): Promise<Prisma.JsonValue>;
   UpdatePasskeyCounter(id: string, userId: string, raw: string, counter: number): Promise<void>;
+  FindPasswordByUserId(id: string): Promise<string>;
 }
 @injectable()
 export class AuthRepository implements IAuthRepository {
@@ -36,6 +39,19 @@ export class AuthRepository implements IAuthRepository {
       DefaultArgs
     >,
   ) {}
+  async FindPasswordByUserId(id: string): Promise<string> {
+    const auth = await this._db.authnOptions.findFirst({
+      where: {
+        option: 'password',
+        userId: id,
+      },
+    });
+    if (!auth) {
+      throw new NotFound();
+    }
+    const { value } = auth.key as Prisma.JsonObject;
+    return value as string;
+  }
   async CreateDevice(userId: string, device: any): Promise<any> {
     const execute: string | any[] = [];
     const json = {
@@ -186,6 +202,18 @@ export class AuthRepository implements IAuthRepository {
       const { value } = auth.key as Prisma.JsonObject;
       const isSimilar = await decode(dto.password, value as string);
       if (isSimilar) {
+        // const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
+        //   modulusLength: 2048,
+        //   publicKeyEncoding: {
+        //     type: 'pkcs1',
+        //     format: 'pem',
+        //   },
+        //   privateKeyEncoding: {
+        //     type: 'pkcs1',
+        //     format: 'pem',
+        //   },
+        // });
+        // const token = jwt.sign(auth.userId, privateKey, { algorithm: 'RS256' });
         return { ok: 'ok' };
       }
       return { message: 'wrong password' };

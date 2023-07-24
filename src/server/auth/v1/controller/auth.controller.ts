@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { inject } from 'inversify';
 import { controller, httpGet, httpPost, request, requestBody, requestHeaders, response } from 'inversify-express-utils';
+import jwt from 'jsonwebtoken';
 
 import { getService } from '../../../common';
 import { RabbitMQClient } from '../../../message-broker';
@@ -50,8 +51,9 @@ export class AuthController {
     return res.json(await this._service.LoginOptions(dto.email));
   }
   @httpPost('/login-password')
-  async LoginPassword(@requestBody() dto: IPasswordLoginDto, @response() res: Response) {
-    return res.json(await this._service.PasswordLogin(dto));
+  async LoginPassword(@requestBody() dto: IPasswordLoginDto, @request() req: Request, @response() res: Response) {
+    const result = await this._service.PasswordLogin(dto, req.headers['x-refreshToken'] as string);
+    return res.cookie('token', result['refreshToken']).json({ ok: 'ok', access_token: result['accessToken'] });
   }
   @httpPost('/login-google-id')
   async LoginGoogleId(@requestBody() dto: IGoogleLoginId, @response() res: Response) {
@@ -78,6 +80,25 @@ export class AuthController {
   }
   @httpGet('/test')
   async Test(@response() res: Response) {
-    RabbitMQClient.messageProduce('user-queue', { type: 'test' });
+    const result = await RabbitMQClient.clientProduce('user-queue', {
+      type: 'get-user-by-email',
+      payload: {
+        email: 'test1@gmail.com',
+      },
+    });
+    return res.json(result);
+  }
+  @httpPost('/test')
+  async Testfn(@request() req: Request, @response() res: Response) {
+    const publicKey =
+      '-----BEGIN RSA PUBLIC KEY-----\nMIIBCgKCAQEA3n3lP9mVwX8lJjU+HR3s6nh69X1JD8njij8bBie2l8/UctBMqBbB\nD2MOtrenr6Q7rsTvvgCYQkK1OmwUrLnfDx0x2y88YVY1enTiEQbxzgsK/wczFIC9\neGXkNOVJsn7htg+sZubXLxJApabJ9dyiVVGfladuzndBDE5KDRr9albwerYTeJI8\nu1MeNn8eqjoDEp2vBnIfS281XdgVUbbi2I+OcyeUt5wZG5H5EqOAjSFRS5WlfDkf\nQJqwvTBRSdeUnzQRCEru3aMvBwdqRJtysqD9gYXzZ900mV0yKSi/iO+XuT5T4oJW\neNfV4VlpPw9q3kaTOZxHlfat4hqDb/L7AwIDAQAB\n-----END RSA PUBLIC KEY-----\n';
+    // const verify = jwt.verify(req.body['token'], publicKey, { algorithms: ['RS256'] });
+    return res.json(await this._service.Test());
+  }
+  @httpPost('/refresh-token')
+  async RefreshToken(@request() req: Request, @response() res: Response) {
+    return res.json(
+      await this._service.RefreshToken(req.body['email'] as string, req.headers['x-refresh-token'] as string),
+    );
   }
 }
