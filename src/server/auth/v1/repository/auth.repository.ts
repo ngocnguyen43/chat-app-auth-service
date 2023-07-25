@@ -3,7 +3,7 @@ import { id, inject, injectable } from 'inversify';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { DefaultArgs } from '@prisma/client/runtime';
 
-import { TYPES } from '../types';
+import { TYPES } from '../@types';
 import { AuthCreateDto, AuthnPasswordDto, IAddGoogleDto, OAuthType } from '@v1';
 import { Options, decode, encode } from '../../../utils';
 import { InternalError, NotFound } from '../../../libs/base-exception';

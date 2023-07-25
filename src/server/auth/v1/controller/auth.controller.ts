@@ -1,12 +1,11 @@
 import { Request, Response } from 'express';
 import { inject } from 'inversify';
-import { controller, httpGet, httpPost, request, requestBody, requestHeaders, response } from 'inversify-express-utils';
-import jwt from 'jsonwebtoken';
+import { controller, httpGet, httpPost, request, requestBody, response } from 'inversify-express-utils';
 
 import { getService } from '../../../common';
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuhtService } from '../service/auth.service';
-import { TYPES } from '../types';
+import { TYPES } from '../@types';
 import { randomUUID } from 'crypto';
 import { Middlewares, RequestValidator } from '../middleware';
 import {

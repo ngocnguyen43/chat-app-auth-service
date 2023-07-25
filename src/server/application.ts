@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import './auth/v1';
+import './auth/v1/controller/auth.controller';
 
 import compression from 'compression';
 import Consul, { ConsulOptions } from 'consul';
