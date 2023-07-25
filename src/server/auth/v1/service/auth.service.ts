@@ -3,7 +3,7 @@ import jwt, { UserJWTPayload } from 'jsonwebtoken';
 import { getService, logger } from '../../../common';
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuthRepository } from '../repository/auth.repository';
-import { TYPES } from '../types';
+import { TYPES } from '../@types';
 import { RegisterDto } from '../controller/auth.controller';
 import { IPasswordLoginDto } from '@v1';
 import { InternalError, NotFound } from '../../../libs/base-exception';

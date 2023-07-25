@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import { TYPES } from '../types';
+import { TYPES } from '../@types';
 import { Prisma, PrismaClient, Token } from '@prisma/client';
 import { DefaultArgs } from '@prisma/client/runtime';
 import crypto from 'crypto';

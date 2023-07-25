@@ -6,7 +6,9 @@ const TYPES = {
   AuthController: Symbol.for('AuthController'),
   TokenRepository: Symbol.for('TokenRepository'),
   Middleware: Symbol.for('middleware'),
+  MessageExecute: Symbol.for('MessageExecute'),
 };
+export { TYPES };
 export interface IEnvironment {
   environment?: string;
   httpPort?: number;
@@ -40,4 +42,3 @@ export interface IEnvironment {
     publicKeyPath?: string;
   };
 }
-export { TYPES };
