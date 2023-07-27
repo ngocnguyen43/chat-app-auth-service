@@ -28,5 +28,6 @@ if (config.state != 'production') {
 }
 
 process.on('unhandledRejection', function (reason, p) {
+  console.log(reason);
   logger.warn('system level exceptions at, Possibly Unhandled Rejection at: Promise ', p, ' reason: ', reason);
 });

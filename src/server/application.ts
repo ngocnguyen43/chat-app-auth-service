@@ -5,7 +5,6 @@ import compression from 'compression';
 import Consul, { ConsulOptions } from 'consul';
 import cors from 'cors';
 import { randomUUID } from 'crypto';
-import * as dotenv from 'dotenv';
 import express, { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { InversifyExpressServer } from 'inversify-express-utils';
@@ -13,13 +12,12 @@ import morgan from 'morgan';
 import os from 'os';
 
 import { config } from '../config';
-import { getService, logger } from './common';
+import { logger } from './common';
 import { container } from './container';
 import { AbstractApplication } from './libs/base-application';
 import { BaseError, NotFound } from './libs/base-exception';
 import { RabbitMQClient } from './message-broker';
 
-dotenv.config();
 export class Application extends AbstractApplication {
   constructor(
     private PID = process.pid,
@@ -47,13 +45,7 @@ export class Application extends AbstractApplication {
           // credentials: true,
         }),
       );
-      app.get('/test', async (req, res) => {
-        const target = await getService('user-service');
-        if (target) {
-          RabbitMQClient.messageProduce(target, { hello: 'ok' });
-        }
-        return res.json({ ok: 'ok' });
-      });
+      app.get('/test', (req, res) => {});
     });
     server.setErrorConfig((app) => {
       app.use((_: Request, res: Response, next: NextFunction) => {

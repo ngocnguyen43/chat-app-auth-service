@@ -1,7 +1,7 @@
-import { Channel, connect, Connection, Replies } from 'amqplib';
-import EventEmitter from 'events';
+import { Channel, connect, Connection } from 'amqplib';
+import EventEmitter from 'stream';
 
-import { logger } from '../common/logger';
+import { logger } from '../common/logging';
 import { config } from '../config';
 import { Consumer } from './Consumer';
 import { Producer } from './Producer';

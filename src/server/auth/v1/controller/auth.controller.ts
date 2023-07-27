@@ -16,6 +16,8 @@ import {
   IWebAuthnLoginVerification,
   IWebAuthnRegisterOptions,
 } from '@v1';
+import { container } from '../../../container';
+import { IMessageExecute } from '../../../message-broker/MessageExecute';
 
 export interface RegisterDto {
   userId: string;
@@ -52,7 +54,14 @@ export class AuthController {
   @httpPost('/login-password')
   async LoginPassword(@requestBody() dto: IPasswordLoginDto, @request() req: Request, @response() res: Response) {
     const result = await this._service.PasswordLogin(dto, req.headers['x-refreshToken'] as string);
-    return res.cookie('token', result['refreshToken']).json({ ok: 'ok', access_token: result['accessToken'] });
+    return res.cookie('token', result['refreshToken']).json({
+      ok: 'ok',
+      id: result['res']['userId'],
+      email: result['res']['email'],
+      full_name: result['res']['fullName'],
+      user_name: result['res']['userName'],
+      access_token: result['accessToken'],
+    });
   }
   @httpPost('/login-google-id')
   async LoginGoogleId(@requestBody() dto: IGoogleLoginId, @response() res: Response) {
@@ -89,10 +98,12 @@ export class AuthController {
   }
   @httpPost('/test')
   async Testfn(@request() req: Request, @response() res: Response) {
-    const publicKey =
-      '-----BEGIN RSA PUBLIC KEY-----\nMIIBCgKCAQEA3n3lP9mVwX8lJjU+HR3s6nh69X1JD8njij8bBie2l8/UctBMqBbB\nD2MOtrenr6Q7rsTvvgCYQkK1OmwUrLnfDx0x2y88YVY1enTiEQbxzgsK/wczFIC9\neGXkNOVJsn7htg+sZubXLxJApabJ9dyiVVGfladuzndBDE5KDRr9albwerYTeJI8\nu1MeNn8eqjoDEp2vBnIfS281XdgVUbbi2I+OcyeUt5wZG5H5EqOAjSFRS5WlfDkf\nQJqwvTBRSdeUnzQRCEru3aMvBwdqRJtysqD9gYXzZ900mV0yKSi/iO+XuT5T4oJW\neNfV4VlpPw9q3kaTOZxHlfat4hqDb/L7AwIDAQAB\n-----END RSA PUBLIC KEY-----\n';
-    // const verify = jwt.verify(req.body['token'], publicKey, { algorithms: ['RS256'] });
-    return res.json(await this._service.Test());
+    // const resp = await this._service.GetPublicKeyFromUserId('212fd513-a02c-475c-9a76-b461303f8819');
+    // const resp = await container
+    //   .get<IMessageExecute>(TYPES.MessageExecute)
+    //   .noResponseExecute('get-user-by-email', '212fd513-a02c-475c-9a76-b461303f8819');
+    const users = await this._service.Test();
+    return res.json(users);
   }
   @httpPost('/refresh-token')
   async RefreshToken(@request() req: Request, @response() res: Response) {

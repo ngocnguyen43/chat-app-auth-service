@@ -6,7 +6,7 @@ import { IAuthRepository } from '../repository/auth.repository';
 import { TYPES } from '../@types';
 import { RegisterDto } from '../controller/auth.controller';
 import { IPasswordLoginDto } from '@v1';
-import { InternalError, NotFound } from '../../../libs/base-exception';
+import { InternalError, NotFound, WrongPassword } from '../../../libs/base-exception';
 import { generateKeyPairSync, randomUUID } from 'crypto';
 import util from 'util';
 
@@ -56,6 +56,7 @@ export interface IAuhtService {
   WebAuthnLoginVerification(email: string, data: any): Promise<any>;
   RefreshToken(email: string, refershToken: string): Promise<any>;
   Test(): Promise<any>;
+  GetPublicKeyFromUserId(id: string): Promise<string>;
 }
 interface IMessageResponse {
   code: number;
@@ -73,6 +74,15 @@ export class AuthService implements IAuhtService {
     @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
   ) {}
+  async GetPublicKeyFromUserId(id: string): Promise<string> {
+    try {
+      const publicKey = await this._tokenRepo.GetPublicKeyFromId(id);
+      return publicKey;
+    } catch (error) {
+      console.log(error);
+      return 'nah';
+    }
+  }
   async RefreshToken(email: string, refershToken: string): Promise<any> {
     const res = (await RabbitMQClient.clientProduce('user-queue', {
       type: 'get-user-by-email',
@@ -120,23 +130,18 @@ export class AuthService implements IAuhtService {
     if (res.code !== 1200) {
       throw new NotFound();
     }
-    try {
-      const decoded = await this._authRepo.FindPasswordByUserId(res.payload['userId']);
-      if (decoded) {
-        const isSimilar = await decode(dto.password, decoded);
-        if (!isSimilar) {
-          return { message: 'wrong password' };
-        }
-        const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-        const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload, privateKey);
-        await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-        return { ok: 'OK', accessToken, refreshToken };
+    const decoded = await this._authRepo.FindPasswordByUserId(res.payload['userId']);
+    if (decoded) {
+      const isSimilar = await decode(dto.password, decoded);
+      if (!isSimilar) {
+        throw new WrongPassword();
       }
-      return { ok: 'nah' };
-    } catch (error) {
-      console.log(error);
-      return { ok: 'not ok' };
+      const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+      const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload, privateKey);
+      await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+      return { ok: 'OK', res: res['payload'], accessToken, refreshToken };
     }
+    throw new WrongPassword();
   }
   async Registration(dto: RegisterDto) {
     const res = (await RabbitMQClient.clientProduce('user-queue', {

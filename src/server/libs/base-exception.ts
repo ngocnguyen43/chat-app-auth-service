@@ -15,3 +15,8 @@ export class InternalError extends BaseError {
     super(StatusCode.INTERNAL_SERVER_ERROR, Reasons.INTERNAL_SERVER_ERROR);
   }
 }
+export class WrongPassword extends BaseError {
+  constructor() {
+    super(StatusCode.UNAUTHORIZED, 'wrong password');
+  }
+}

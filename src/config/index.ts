@@ -1,4 +1,6 @@
+import * as dotenv from 'dotenv';
 import merge from 'lodash.merge';
+dotenv.config();
 
 // make sure NODE_ENV is set
 process.env.NODE_ENV = process.env.NODE_ENV || 'development';

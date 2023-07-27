@@ -21,6 +21,7 @@ export interface ITokenRepository {
   CreateKeysPair(): CreateKeys;
   SaveTokens(id: string, publicKey: string, refreshToken: string): Promise<void>;
   ClearToken(id: string): Promise<void>;
+  GetPublicKeyFromId(id: string): Promise<string | null>;
 }
 @injectable()
 export class TokenRepository implements ITokenRepository {
@@ -33,6 +34,17 @@ export class TokenRepository implements ITokenRepository {
       DefaultArgs
     >,
   ) {}
+  async GetPublicKeyFromId(id: string): Promise<string | null> {
+    const { publicKey } = await this._db.token.findUnique({
+      where: {
+        userId: id,
+      },
+      select: {
+        publicKey: true,
+      },
+    });
+    return publicKey ?? null;
+  }
   async ClearToken(id: string): Promise<void> {
     const execute: string | any[] = [];
     const existedToken = await this.FindTokensByUserId(id);
@@ -87,11 +99,11 @@ export class TokenRepository implements ITokenRepository {
   CreateTokens(data: any, privateKey: string): CreateTokens {
     const accessToken = jwt.sign(data, privateKey, {
       algorithm: 'RS256',
-      expiresIn: '2 days',
+      expiresIn: '3 days',
     });
     const refreshToken = jwt.sign(data, privateKey, {
       algorithm: 'RS256',
-      expiresIn: '30s',
+      expiresIn: '2 days',
     });
     return { accessToken, refreshToken };
   }

@@ -23,9 +23,10 @@ export class Consumer {
           const { correlationId, replyTo } = message.properties;
           console.log(message.content.toString());
           if (!correlationId || !replyTo) {
-            console.log('Missing some properties...');
+            await MessageHandler.handle(JSON.parse(message.content.toString()));
+          } else {
+            await MessageHandler.handle(JSON.parse(message.content.toString()), correlationId, replyTo);
           }
-          await MessageHandler.handle(JSON.parse(message.content.toString()), correlationId, replyTo);
         })();
       },
       {
