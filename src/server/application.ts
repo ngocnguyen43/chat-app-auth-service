@@ -45,7 +45,7 @@ export class Application extends AbstractApplication {
           // credentials: true,
         }),
       );
-      app.get('/test', (req, res) => {});
+      app.get('/test', (req, res) => { });
     });
     server.setErrorConfig((app) => {
       app.use((_: Request, res: Response, next: NextFunction) => {
@@ -65,7 +65,7 @@ export class Application extends AbstractApplication {
     app.listen(config.port, () => {
       console.log(`App is running in port ${config.port}`);
       RabbitMQClient.initialize('auth-queue');
-      this.registerConsul();
+      // this.registerConsul();
     });
   }
   registerConsul() {

@@ -1,7 +1,6 @@
 import { id, inject, injectable } from 'inversify';
 
 import { Prisma, PrismaClient } from '@prisma/client';
-import { DefaultArgs } from '@prisma/client/runtime';
 
 import { TYPES } from '../@types';
 import { AuthCreateDto, AuthnPasswordDto, IAddGoogleDto, OAuthType } from '@v1';
@@ -32,13 +31,8 @@ export interface IAuthRepository {
 export class AuthRepository implements IAuthRepository {
   constructor(
     @inject(TYPES.Prisma)
-    private readonly _db: PrismaClient<
-      Prisma.PrismaClientOptions,
-      never,
-      Prisma.RejectOnNotFound | Prisma.RejectPerOperation,
-      DefaultArgs
-    >,
-  ) {}
+    private readonly _db: PrismaClient
+  ) { }
   async FindPasswordByUserId(id: string): Promise<string> {
     const auth = await this._db.authnOptions.findFirst({
       where: {

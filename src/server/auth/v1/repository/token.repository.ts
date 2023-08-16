@@ -1,7 +1,6 @@
 import { inject, injectable } from 'inversify';
 import { TYPES } from '../@types';
 import { Prisma, PrismaClient, Token } from '@prisma/client';
-import { DefaultArgs } from '@prisma/client/runtime';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 
@@ -27,13 +26,8 @@ export interface ITokenRepository {
 export class TokenRepository implements ITokenRepository {
   constructor(
     @inject(TYPES.Prisma)
-    private readonly _db: PrismaClient<
-      Prisma.PrismaClientOptions,
-      never,
-      Prisma.RejectOnNotFound | Prisma.RejectPerOperation,
-      DefaultArgs
-    >,
-  ) {}
+    private readonly _db: PrismaClient,
+  ) { }
   async GetPublicKeyFromId(id: string): Promise<string | null> {
     const { publicKey } = await this._db.token.findUnique({
       where: {

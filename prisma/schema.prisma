@@ -34,7 +34,7 @@ model User {
 model AuthnOptions {
   id     String  @id @unique @default(uuid()) @map("option_id")
   userId String  @map("user_id")
-  Users  User?   @relation(fields: [userId], references: [id])
+  Users  User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
   option Options
   key    Json
 

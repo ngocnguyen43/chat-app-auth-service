@@ -1,7 +1,6 @@
 import { Container, ContainerModule } from 'inversify';
 
-import { Prisma, PrismaClient } from '@prisma/client';
-import { DefaultArgs } from '@prisma/client/runtime';
+import { PrismaClient } from '@prisma/client';
 
 import { prisma } from './config';
 import { IMessageExecute, MessageExecute } from './message-broker/MessageExecute';
@@ -17,9 +16,7 @@ import {
 import { RequestValidator } from './auth/v1/middleware';
 
 const thirdPartyDependencies = new ContainerModule((bind) => {
-  bind<
-    PrismaClient<Prisma.PrismaClientOptions, never, Prisma.RejectOnNotFound | Prisma.RejectPerOperation, DefaultArgs>
-  >(TYPES.Prisma).toConstantValue(prisma);
+  bind<PrismaClient>(TYPES.Prisma).toConstantValue(prisma);
   // ..
 });
 
