@@ -221,9 +221,7 @@ export class AuthRepository implements IAuthRepository {
     const execute: string | any[] = [];
     execute.push(
       this._db.user.create({
-        data: {
-          id: dto.id,
-        },
+        data: dto
       }),
     );
     await this._db.$transaction(execute);

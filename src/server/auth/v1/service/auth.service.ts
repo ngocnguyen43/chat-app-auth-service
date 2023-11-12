@@ -73,7 +73,7 @@ export class AuthService implements IAuhtService {
   constructor(
     @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
-  ) {}
+  ) { }
   async GetPublicKeyFromUserId(id: string): Promise<string> {
     try {
       const publicKey = await this._tokenRepo.GetPublicKeyFromId(id);
@@ -150,7 +150,7 @@ export class AuthService implements IAuhtService {
     })) as IMessageResponse;
     if (res.code != 1200) {
       try {
-        await this._authRepo.CreateOne({ id: dto.userId });
+        await this._authRepo.CreateOne({ id: dto.userId, createdAt: dto.createdAt, updatedAt: dto.updatedAt });
         await this._authRepo.AddPassword({ id: dto.userId, pasword: dto.password });
         RabbitMQClient.messageProduce('user-queue', {
           type: 'add-user',
@@ -159,6 +159,8 @@ export class AuthService implements IAuhtService {
             email: dto.email,
             userName: dto.userName,
             fullName: dto.fullName,
+            createdAt: dto.createdAt,
+            updatedAt: dto.updatedAt
           },
         });
         RabbitMQClient.messageProduce('chat-queue', {
@@ -197,7 +199,8 @@ export class AuthService implements IAuhtService {
           },
         });
         //add user
-        await this._authRepo.CreateOne({ id: userId });
+        const unixTimestamp = Date.now().toString();
+        await this._authRepo.CreateOne({ id: userId, createdAt: unixTimestamp, updatedAt: unixTimestamp });
         //add google in authn_opotions
         await this._authRepo.AddGoogle({ id: userId, email: decoded.email, aud: decoded.aud });
         //return
@@ -215,17 +218,19 @@ export class AuthService implements IAuhtService {
     await this._authRepo.AddGoogle({ id: res.payload['userId'], email: decoded.email, aud: decoded.aud });
     return { fullname: decoded.family_name + decoded.given_name, email: decoded.email };
   }
-  GithubLogin = async () => {};
-  FacebookLogin = async () => {};
-  GooglePopupLogin = async () => {};
+  GithubLogin = async () => { };
+  FacebookLogin = async () => { };
+  GooglePopupLogin = async () => { };
   async LoginOptions(email: string) {
     try {
       const target = await getService('user-service');
+      console.log(target)
       if (target) {
-        const res = (await RabbitMQClient.clientProduce(target, {
+        const res = (await RabbitMQClient.clientProduce("user-queue", {
           type: 'get-user-by-email',
           payload: { email: email },
         })) as IMessageResponse;
+        console.log(res)
         if (res.code !== 1200) {
           return {
             opts: {
@@ -266,10 +271,10 @@ export class AuthService implements IAuhtService {
       attestationType: 'none',
       excludeCredentials: authn
         ? (authn.key['devices'] as []).map((dev: any) => ({
-            id: dev.credentialID,
-            type: 'public-key',
-            transports: dev.transports,
-          }))
+          id: dev.credentialID,
+          type: 'public-key',
+          transports: dev.transports,
+        }))
         : [],
       authenticatorSelection: {
         userVerification: 'required',
@@ -349,7 +354,7 @@ export class AuthService implements IAuhtService {
       if (!target) {
         throw new InternalError();
       }
-      const res = (await RabbitMQClient.clientProduce(target, {
+      const res = (await RabbitMQClient.clientProduce("user-queue", {
         type: 'get-user-by-email',
         payload: {
           email: email,
@@ -363,11 +368,11 @@ export class AuthService implements IAuhtService {
         timeout: 60000,
         allowCredentials: authn
           ? (authn.key['devices'] as []).map((device: any) => ({
-              id: device.credentialID,
-              type: 'public-key',
-              // Optional
-              transports: device.transports,
-            }))
+            id: device.credentialID,
+            type: 'public-key',
+            // Optional
+            transports: device.transports,
+          }))
           : [],
         // userVerification: 'required',
         userVerification: 'preferred',

@@ -65,7 +65,7 @@ export class Application extends AbstractApplication {
     app.listen(config.port, () => {
       console.log(`App is running in port ${config.port}`);
       RabbitMQClient.initialize('auth-queue');
-      // this.registerConsul();
+      this.registerConsul();
     });
   }
   registerConsul() {
@@ -98,7 +98,7 @@ export class Application extends AbstractApplication {
       setInterval(() => {
         consul.agent.check.pass({ id: `service:${this.CONSUL_ID}` }, (err: any) => {
           if (err) throw new Error(err);
-          console.log('Send out heartbeat to consul');
+          // console.log('Send out heartbeat to consul');
         });
       }, 5 * 1000);
 

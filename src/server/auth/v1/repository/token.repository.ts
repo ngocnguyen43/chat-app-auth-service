@@ -61,6 +61,7 @@ export class TokenRepository implements ITokenRepository {
   async SaveTokens(id: string, publicKey: string, refreshToken: string): Promise<void> {
     const execute: string | any[] = [];
     const existToken = await this.FindTokensByUserId(id);
+    const unixTimestamp = Date.now().toString()
     if (!existToken) {
       execute.push(
         this._db.token.create({
@@ -69,6 +70,7 @@ export class TokenRepository implements ITokenRepository {
             userId: id,
             refreshToken: refreshToken,
             refreshTokenUsed: [],
+            updatedAt: unixTimestamp
           },
         }),
       );
@@ -139,11 +141,13 @@ export class TokenRepository implements ITokenRepository {
     const token = await this._db.token.findUnique({ where: { userId: userId } });
     const refreshTokenUsed = token.refreshTokenUsed as Prisma.JsonArray;
     refreshTokenUsed.push(refreshToken);
+    const unixTimestamp = Date.now().toString()
     execute.push(
       this._db.token.update({
         data: {
           publicKey: publicKey,
           refreshTokenUsed: refreshTokenUsed,
+          updatedAt: unixTimestamp
         },
         where: {
           userId: userId,

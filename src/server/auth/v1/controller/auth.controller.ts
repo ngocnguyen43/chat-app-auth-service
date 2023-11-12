@@ -25,12 +25,14 @@ export interface RegisterDto {
   userName: string;
   fullName: string;
   password: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 @controller('/api/v1/auth')
 export class AuthController {
   private rabbitMq = RabbitMQClient;
-  constructor(@inject(TYPES.AuthService) private readonly _service: IAuhtService) {}
+  constructor(@inject(TYPES.AuthService) private readonly _service: IAuhtService) { }
   @httpPost('/register', ...Middlewares.postRegisterCheck, RequestValidator)
   async Register(@request() req: Request, @requestBody() dto: RegisterDto, @response() res: Response) {
     dto.userId = randomUUID();

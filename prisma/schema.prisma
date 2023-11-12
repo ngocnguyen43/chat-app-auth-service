@@ -22,8 +22,8 @@ enum Options {
 model User {
   id               String         @id @unique @default(uuid()) @map("user_id")
   currentChallenge String?        @map("current_challenge")
-  createdAt        DateTime       @default(now()) @map("created_at")
-  updatedAt        DateTime       @updatedAt @map("updated_at")
+  createdAt        String         @map("created_at") @db.VarChar(13)
+  updatedAt        String         @map("updated_at") @db.VarChar(13)
   AuthOtions       AuthnOptions[]
   GroupUsers       GroupUsers[]
   Tokens           Token?
@@ -43,12 +43,12 @@ model AuthnOptions {
 }
 
 model Token {
-  id               String   @id @unique @default(uuid()) @map("token_id")
-  userId           String   @unique @map("user_id")
-  publicKey        String?  @map("public_key") @db.VarChar(500)
-  refreshToken     String?  @map("refresh_token") @db.VarChar(700)
-  refreshTokenUsed Json?    @map("refresh_token_used")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id               String  @id @unique @default(uuid()) @map("token_id")
+  userId           String  @unique @map("user_id")
+  publicKey        String? @map("public_key") @db.VarChar(500)
+  refreshToken     String? @map("refresh_token") @db.VarChar(700)
+  refreshTokenUsed Json?   @map("refresh_token_used")
+  updatedAt        String  @map("updated_at") @db.VarChar(13)
 
   user User @relation(references: [id], fields: [userId], onDelete: Cascade)
 
