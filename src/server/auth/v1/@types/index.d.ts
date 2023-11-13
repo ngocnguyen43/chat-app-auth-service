@@ -1,13 +1,6 @@
-declare namespace NodeJS {
-  export interface global {
-    abc: string;
-  }
-}
 declare module '@v1' {
   export interface AuthCreateDto {
     id: string;
-    createdAt: string;
-    updatedAt: string
   }
   export interface AuthnPasswordDto {
     id: string;

@@ -2,7 +2,9 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "fullTextIndex"]
+  binaryTargets   = ["native", "linux-musl"]
 }
 
 datasource db {
@@ -10,49 +12,85 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Users {
-  id         String      @id @unique
-  firstName  String      @map("first_name")
-  lastName   String      @map("last_name")
-  email      String      @unique @db.VarChar(100)
-  password   String?     @db.VarChar(255)
-  avatar     String?
-  createdAt  DateTime    @default(now()) @map("created_at")
-  updatedAt  DateTime    @updatedAt @map("updated_at")
-  GroupUsers GroupUsers? @relation(fields: [id], references: [id], onDelete: Cascade)
+enum Options {
+  password
+  passkey
+  otp
+  oauth
+}
+
+model User {
+  id               String         @id @unique @default(uuid()) @map("user_id")
+  currentChallenge String?        @map("current_challenge")
+  createdAt        String         @map("created_at") @db.VarChar(13)
+  updatedAt        String         @map("updated_at") @db.VarChar(13)
+  AuthOtions       AuthnOptions[]
+  GroupUsers       GroupUsers[]
+  Tokens           Token?
+
+  @@map("users")
+}
+
+model AuthnOptions {
+  id     String  @id @unique @default(uuid()) @map("option_id")
+  userId String  @map("user_id")
+  Users  User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  option Options
+  key    Json
+
+  @@index([id, userId, option])
+  @@map("authn_options")
+}
+
+model Token {
+  id               String  @id @unique @default(uuid()) @map("token_id")
+  userId           String  @unique @map("user_id")
+  publicKey        String? @map("public_key") @db.VarChar(500)
+  refreshToken     String? @map("refresh_token") @db.VarChar(700)
+  refreshTokenUsed Json?   @map("refresh_token_used")
+  updatedAt        String  @map("updated_at") @db.VarChar(13)
+
+  user User @relation(references: [id], fields: [userId], onDelete: Cascade)
+
+  @@map("tokens")
 }
 
 model GroupUsers {
-  id      String  @id @unique @db.VarChar(36)
-  userId  String  @map("user_id") @db.VarChar(36)
-  groupId String  @map("group_id") @db.VarChar(36)
-  users   Users[]
-  Groups  Group   @relation(fields: [groupId], references: [id])
+  id      String @id @unique @default(uuid())
+  userId  String @map("user_id")
+  groupId String @map("group_id")
+  // Groups  Group  @relation(fields: [groupId], references: [id])
+  User    User?  @relation(fields: [userId], references: [id])
 }
 
-model Group {
-  id           String        @id @unique @db.VarChar(36)
-  creator      String        @db.VarChar(36)
-  createdAt    DateTime      @default(now()) @db.DateTime(0)
-  GroupUsers   GroupUsers[]
-  Conversation Conversation?
-}
+// model Group {
+//   id           String        @id @unique @default(uuid())
+//   creator      String
+//   createdAt    DateTime      @default(now()) @map("created_at") @db.DateTime(0)
+//   GroupUsers   GroupUsers[]
+//   Conversation Conversation?
+// }
 
-model Conversation {
-  id            String    @id @unique @db.VarChar(36)
-  groupId       String    @unique @map("group_id") @db.VarChar(36)
-  Group         Group     @relation(fields: [groupId], references: [id])
-  lastMessage   String?   @db.Text
-  lastMessageAt DateTime? @default(now()) @db.DateTime(0)
-  creator       String?   @db.VarChar(36)
-  messages      Message[]
-}
+// model Conversation {
+//   id            String    @id @unique @default(uuid())
+//   groupId       String    @unique @map("group_id") @db.VarChar(36)
+//   Group         Group     @relation(fields: [groupId], references: [id])
+//   lastMessage   String?   @map("last_message") @db.Text
+//   lastMessageAt DateTime? @default(now()) @map("last_message_at") @db.DateTime(0)
+//   creator       String
+//   messages      Message[]
 
-model Message {
-  id             Int          @id @default(autoincrement())
-  conversationId String       @db.VarChar(36)
-  from           String       @db.VarChar(36)
-  message        String       @db.Text
-  createdAt      DateTime     @default(now()) @db.DateTime(0)
-  Conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-}
+//   @@map("conversations")
+// }
+
+// model Message {
+//   id             Int          @id @default(autoincrement())
+//   conversationId String       @db.VarChar(36)
+//   from           String       @db.VarChar(32)
+//   message        String       @db.Text
+//   createdAt      DateTime     @default(now()) @db.DateTime(0)
+//   nah            String
+//   Conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+//   @@map("messages")
+// }
