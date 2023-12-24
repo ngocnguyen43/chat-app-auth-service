@@ -22,9 +22,10 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install Doppler CLI
-        uses: dopplerhq/cli-action@v1
+        uses: dopplerhq/cli-action@v2
 
       - name: Test Doppler Access
-        run: doppler run -- printenv
+        run: |
+          echo "$(doppler configs tokens create docker  --plain)"
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
