@@ -1,16 +1,11 @@
-name: ci
+name: cd
 
 on:
   push:
     branches:
-      - master
-      - release/*
+      - '*'
     tags:
       - 'v*'
-  pull_request:
-    branches:
-      - master
-      - release/*
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -20,9 +15,8 @@ jobs:
       - run: |
           echo "123"
   build:
+    if: contains('refs/heads/release*',github.ref)
     runs-on: ubuntu-latest
-    if: github.ref != 'refs/heads/master'
-    needs: [test]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
