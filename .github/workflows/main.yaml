@@ -24,6 +24,6 @@ jobs:
         uses: dopplerhq/cli-action@v1
 
       - name: Test Doppler Access
-        run: doppler run -- printenv | grep GCP_PROJECT
+        run: doppler run -- printenv
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
