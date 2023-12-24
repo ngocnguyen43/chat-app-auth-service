@@ -16,7 +16,7 @@ jobs:
       - run: |
           echo "123"
   build:
-    if: contains('refs/heads/release*',github.ref)
+    if: github.ref != 'master'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
