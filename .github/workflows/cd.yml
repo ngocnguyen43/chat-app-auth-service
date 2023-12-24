@@ -1,10 +1,10 @@
-name: ci
+name: cd
 
 on:
   push:
     branches:
-      - master
-      - release/*
+      - 'main'
+      - 'release/*'
     tags:
       - 'v*'
 jobs:
@@ -16,6 +16,7 @@ jobs:
       - run: |
           echo "123"
   build:
+    if: startsWith(github.ref,'refs/heads/release') && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,25 +32,22 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ secrets.DOCKER_IMAGE }}
-          custom-tag: 'latest'
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
+            type=ref, event=branch
             type=ref, event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Show version
         id: show_version
         run: |
           echo "${{steps.meta.outputs}}"
-      # - name: Build and push
-      #   uses: docker/build-push-action@v5
-      #   with:
-      #     context: .
-      #     file: ./Dockerfile
-      #     push: true
-      #     tags: ${{ secrets.DOCKERHUB_USERNAME }}/clockbox:latest
-      #     build-args: DOPPLER_TOKEN=${{secrets.DOPPLER_TOKEN}}
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{steps.meta.outputs.tags}}
+          build-args: DOPPLER_TOKEN=${{secrets.DOPPLER_TOKEN}}
