@@ -1,0 +1,19 @@
+version: "2"
+services:
+  app:
+    build: ./
+    restart: always
+    # Ignore editor syntax errors. Produces valid YAML
+    environment:
+      - CONSUL_HOST_DEV
+      - CONSUL_HOST_PROD
+      - DATABASE_URL
+      - GOOGLE_CLIENT_ID
+      - JWT_SECRET
+      - MESSAGE_BROKER_URL_DEV
+      - REDIS_HOST
+      - REDIS_PORT_DEV
+      - REDIS_PORT_PROD
+      - REDIS_PORT_TEST
+    ports:
+      - "6001:6001"

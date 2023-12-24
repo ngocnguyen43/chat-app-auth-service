@@ -23,7 +23,8 @@ export class Application extends AbstractApplication {
     private PID = process.pid,
     private HOST = os.hostname(),
     private PORT = config.port,
-    private CONSUL_ID = `service-${HOST}-${config.port}-${randomUUID()}`,
+    private CONSUL_ID = `${randomUUID()}`,
+    private HOST_PORT = config['HOST_PORT']
   ) {
     super();
   }
@@ -45,7 +46,6 @@ export class Application extends AbstractApplication {
           // credentials: true,
         }),
       );
-      app.get('/test', (req, res) => { });
     });
     server.setErrorConfig((app) => {
       app.use((_: Request, res: Response, next: NextFunction) => {
@@ -65,12 +65,12 @@ export class Application extends AbstractApplication {
     app.listen(config.port, () => {
       console.log(`App is running in port ${config.port}`);
       RabbitMQClient.initialize('auth-queue');
-      this.registerConsul();
+      // this.registerConsul();
     });
   }
   registerConsul() {
     const consulOptions: ConsulOptions = {
-      host: '127.0.0.1',
+      host: config["CONSUL_URL"],
       port: '8500',
       secure: false,
       promisify: false,

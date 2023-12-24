@@ -26,6 +26,7 @@ export interface IAuthRepository {
   FindPasskeys(id: string): Promise<Prisma.JsonValue>;
   UpdatePasskeyCounter(id: string, userId: string, raw: string, counter: number): Promise<void>;
   FindPasswordByUserId(id: string): Promise<string>;
+  TestCnt(): Promise<void>
 }
 @injectable()
 export class AuthRepository implements IAuthRepository {
@@ -33,6 +34,9 @@ export class AuthRepository implements IAuthRepository {
     @inject(TYPES.Prisma)
     private readonly _db: PrismaClient
   ) { }
+  async TestCnt(): Promise<void> {
+    await this._db.user.count()
+  }
   async FindPasswordByUserId(id: string): Promise<string> {
     const auth = await this._db.authnOptions.findFirst({
       where: {

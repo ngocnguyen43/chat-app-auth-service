@@ -98,14 +98,15 @@ export class AuthController {
     });
     return res.json(result);
   }
-  @httpPost('/test')
+  @httpGet('/test')
   async Testfn(@request() req: Request, @response() res: Response) {
     // const resp = await this._service.GetPublicKeyFromUserId('212fd513-a02c-475c-9a76-b461303f8819');
     // const resp = await container
     //   .get<IMessageExecute>(TYPES.MessageExecute)
     //   .noResponseExecute('get-user-by-email', '212fd513-a02c-475c-9a76-b461303f8819');
-    const users = await this._service.Test();
-    return res.json(users);
+    // const users = await this._service.Test();
+    await this._service.TestCnt();
+    return res.json({ msg: "OK" });
   }
   @httpPost('/refresh-token')
   async RefreshToken(@request() req: Request, @response() res: Response) {
