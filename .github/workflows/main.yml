@@ -21,7 +21,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          image: |
+          images: |
             docker.io/minhngocnguyen/auth-service
 
       - name: Set up Docker Buildx
