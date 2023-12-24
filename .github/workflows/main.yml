@@ -4,7 +4,8 @@ on:
   push:
     branches:
       - master
-
+    tags:
+      - 'v/*'
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,7 +24,12 @@ jobs:
         with:
           images: |
             name/app
-
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Show version
