@@ -8,6 +8,13 @@ on:
     tags:
       - 'v*'
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test Phase
+        uses: actions/checkout@v4
+      - run: |
+          echo "123"
   build:
     runs-on: ubuntu-latest
     steps:
@@ -19,14 +26,12 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PAT }}
 
-      - name: Set Docker Image Version
-        run: echo "VERSION=${GITHUB_REF##*/}" >> $GITHUB_ENV
-
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ secrets.DOCKER_IMAGE }}
+          custom-tag: 'latest'
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -39,7 +44,7 @@ jobs:
       - name: Show version
         id: show_version
         run: |
-          echo "${{steps.meta.outputs.tags}}"
+          echo "${{steps.meta.outputs}}"
       # - name: Build and push
       #   uses: docker/build-push-action@v5
       #   with:
