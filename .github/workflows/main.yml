@@ -51,5 +51,5 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_IMAGE }}/${{steps.meta.outputs.tags}}
+          tags: ${{ secrets.DOCKER_IMAGE }}+":"+ ${{steps.meta.outputs.tags}}
           build-args: DOPPLER_TOKEN=${{secrets.DOPPLER_TOKEN}}
