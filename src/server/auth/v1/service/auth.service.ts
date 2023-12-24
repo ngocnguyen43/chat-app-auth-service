@@ -76,7 +76,13 @@ export class AuthService implements IAuhtService {
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
   ) { }
   async TestCnt(): Promise<void> {
-    await this._authRepo.TestCnt()
+    try {
+
+      await this._authRepo.TestCnt()
+    } catch (error) {
+      console.log(error);
+
+    }
   }
   async GetPublicKeyFromUserId(id: string): Promise<string> {
     try {

@@ -16,7 +16,8 @@ jobs:
       - run: |
           echo "123"
   build:
-    if: startsWith(github.ref,'refs/heads/release') && github.event_name != 'pull_request'
+    if: startsWith(github.ref,'refs/heads/release') ||  github.event_name != 'pull_request'
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
