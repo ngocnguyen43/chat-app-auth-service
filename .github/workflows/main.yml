@@ -22,7 +22,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            docker.io/minhngocnguyen/auth-service
+            name/app
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
