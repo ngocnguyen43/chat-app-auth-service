@@ -26,6 +26,6 @@ jobs:
 
       - name: Test Doppler Access
         run: |
-          echo "$(doppler configs tokens create docker  --plain)"
+          doppler secrets
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
