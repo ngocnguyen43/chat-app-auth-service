@@ -10,6 +10,7 @@ on:
   pull_request:
     branches:
       - master
+      - release/*
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -36,7 +37,6 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ secrets.DOCKER_IMAGE }}
-          custom-tag: 'latest'
           tags: |
             type=ref, event=branch
             type=ref, event=tag
