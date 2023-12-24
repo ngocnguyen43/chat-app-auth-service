@@ -98,7 +98,7 @@ export class AuthController {
     });
     return res.json(result);
   }
-  @httpGet('/test')
+  @httpGet('/testfn')
   async Testfn(@request() req: Request, @response() res: Response) {
     // const resp = await this._service.GetPublicKeyFromUserId('212fd513-a02c-475c-9a76-b461303f8819');
     // const resp = await container
