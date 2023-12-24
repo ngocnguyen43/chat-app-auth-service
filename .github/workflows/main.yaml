@@ -1,0 +1,29 @@
+name: Test CLI action
+
+on:
+  push:
+    branches: -master
+
+jobs:
+  check-doppler:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Install CLI
+        uses: dopplerhq/cli-action@v2
+      - name: Test CLI
+        run: doppler --version
+  setup-build:
+    name: Setup, Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v1
+
+      - name: Test Doppler Access
+        run: doppler run -- printenv | grep GCP_PROJECT
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}

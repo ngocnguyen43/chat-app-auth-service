@@ -4,7 +4,7 @@ import winston from 'winston';
 
 import { config } from '../config';
 
-const logDir = 'src/server/log'; // directory path you want to set
+const logDir = process.env["STAGE"] === "dev'" ? 'src/server/log' : "dist/server/log"; // directory path you want to set
 if (!fs.existsSync(logDir)) {
   // Create the directory if it does not exist
   fs.mkdirSync(logDir);

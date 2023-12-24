@@ -5,7 +5,7 @@
   "main": "server.ts",
   "scripts": {
     "clean": "node ./node_modules/rimraf/bin.js dist",
-    "dev": "set STAGE=dev&& ts-node-dev src/bootstrap.ts",
+    "dev": " export STAGE=dev&& ts-node-dev src/bootstrap.ts",
     "prod": "set STAGE=production&& ts-node-dev src/bootstrap.ts",
     "test": "jest",
     "debug": "nodemon",

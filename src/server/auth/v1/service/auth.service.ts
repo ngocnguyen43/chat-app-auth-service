@@ -57,6 +57,7 @@ export interface IAuhtService {
   RefreshToken(email: string, refershToken: string): Promise<any>;
   Test(): Promise<any>;
   GetPublicKeyFromUserId(id: string): Promise<string>;
+  TestCnt(): Promise<void>
 }
 interface IMessageResponse {
   code: number;
@@ -74,6 +75,9 @@ export class AuthService implements IAuhtService {
     @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
   ) { }
+  async TestCnt(): Promise<void> {
+    await this._authRepo.TestCnt()
+  }
   async GetPublicKeyFromUserId(id: string): Promise<string> {
     try {
       const publicKey = await this._tokenRepo.GetPublicKeyFromId(id);
