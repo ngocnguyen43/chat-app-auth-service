@@ -36,7 +36,15 @@ export class AuthController {
   @httpPost('/register', ...Middlewares.postRegisterCheck, RequestValidator)
   async Register(@request() req: Request, @requestBody() dto: RegisterDto, @response() res: Response) {
     dto.userId = randomUUID();
-    return res.json(await this._service.Registration(dto));
+    const result = await this._service.Registration(dto)
+    return res.cookie('token', result['refreshToken']).json({
+      ok: 'ok',
+      id: result['res']['userId'],
+      email: result['res']['email'],
+      full_name: result['res']['fullName'],
+      user_name: result['res']['userName'],
+      access_token: result['accessToken'],
+    });
   }
   @httpPost('/login-google')
   async LoginGoogle(req: Request, res: Response) {
