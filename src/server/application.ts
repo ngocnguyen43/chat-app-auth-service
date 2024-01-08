@@ -43,7 +43,7 @@ export class Application extends AbstractApplication {
       app.use(
         cors({
           credentials: true,
-          origin: config["ORIGIN"],
+          origin: ['https://' + config['ORIGIN'], 'https://www.' + config['ORIGIN'], config['ORIGIN']],
         }),
       );
     });
