@@ -64,8 +64,7 @@ export class AuthController {
   @httpPost('/login-password')
   async LoginPassword(@requestBody() dto: IPasswordLoginDto, @request() req: Request, @response() res: Response) {
     const result = await this._service.PasswordLogin(dto, req.headers['x-refreshToken'] as string);
-    return res.cookie('token', result['refreshToken']).json({
-      ok: 'ok',
+    return res.cookie('rft', result['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: ".localhost", maxAge: 8 * 60 * 60 * 1000 }).json({
       id: result['res']['userId'],
       email: result['res']['email'],
       full_name: result['res']['fullName'],

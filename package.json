@@ -11,7 +11,7 @@
     "debug": "nodemon",
     "build": "node ./node_modules/typescript/bin/tsc",
     "start": "npm run clean && npm run build && node ./dist/bootstrap.js",
-    "start:prod": " node ./dist/bootstrap.js"
+    "start:prod": "NODE_ENV=production  node ./dist/bootstrap.js"
   },
   "keywords": [],
   "author": "",

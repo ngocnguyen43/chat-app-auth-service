@@ -42,8 +42,8 @@ export class Application extends AbstractApplication {
       app.use(helmet());
       app.use(
         cors({
-          origin: '*',
-          // credentials: true,
+          credentials: true,
+          origin: config["ORIGIN"],
         }),
       );
     });
