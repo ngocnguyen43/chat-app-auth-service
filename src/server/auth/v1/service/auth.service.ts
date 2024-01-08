@@ -180,12 +180,13 @@ export class AuthService implements IAuhtService {
             fullName: dto.fullName,
           },
         });
-        return { message: 'success' };
+        const login = await this.PasswordLogin({ email: dto.email, password: dto.password }, "")
+        return login;
       } catch (error) {
         logger.error(error['message']);
       }
     }
-    return { message: 'conflict' };
+    return { message: 'email already in used!' };
   }
   async GoogleLogin(credential: string) {
     const decoded = jwt.decode(credential) as UserJWTPayload;
