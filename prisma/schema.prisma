@@ -46,7 +46,7 @@ model Token {
   id               String  @id @unique @default(uuid()) @map("token_id")
   userId           String  @unique @map("user_id")
   publicKey        String? @map("public_key") @db.VarChar(500)
-  refreshToken     String? @map("refresh_token") @db.VarChar(700)
+  refreshToken     String? @map("refresh_token") @db.VarChar(900)
   refreshTokenUsed Json?   @map("refresh_token_used")
   updatedAt        String  @map("updated_at") @db.VarChar(13)
 

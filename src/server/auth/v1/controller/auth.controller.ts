@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
 import { inject } from 'inversify';
-import { controller, httpGet, httpPost, request, requestBody, response } from 'inversify-express-utils';
+import { controller, httpGet, httpPost, queryParam, request, requestBody, response } from 'inversify-express-utils';
 
 import { getService } from '../../../common';
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuhtService } from '../service/auth.service';
-import { TYPES } from '../@types';
+import { FacebookUserType, GithubUserType, GoogleUserType, StrictUnion, TYPES } from '../@types';
 import { randomUUID } from 'crypto';
 import { Middlewares, RequestValidator } from '../middleware';
 import {
@@ -18,7 +18,13 @@ import {
 } from '@v1';
 import { container } from '../../../container';
 import { IMessageExecute } from '../../../message-broker/MessageExecute';
-
+import { config } from '../../../config';
+import { OAuth2Client } from 'google-auth-library';
+import axios from "axios"
+import { passportGoogle } from '../oauth2/google';
+import { passportGithub } from '../oauth2/github';
+import { passportFacebook } from '../oauth2/facebook';
+import { WrongCredentials } from '../../../libs/base-exception';
 export interface RegisterDto {
   userId: string;
   email: string;
@@ -63,8 +69,8 @@ export class AuthController {
   }
   @httpPost('/login-password')
   async LoginPassword(@requestBody() dto: IPasswordLoginDto, @request() req: Request, @response() res: Response) {
-    const result = await this._service.PasswordLogin(dto, req.headers['x-refreshToken'] as string);
-    return res.cookie('rft', result['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: ".localhost", maxAge: 8 * 60 * 60 * 1000 }).json({
+    const result = await this._service.PasswordLogin(dto);
+    return res.cookie('rft', result['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: ".localhost", maxAge: 2 * 60 * 60 * 1000 }).json({
       id: result['res']['userId'],
       email: result['res']['email'],
       full_name: result['res']['fullName'],
@@ -121,4 +127,132 @@ export class AuthController {
       await this._service.RefreshToken(req.body['email'] as string, req.headers['x-refresh-token'] as string),
     );
   }
+  // @httpGet("/oauth-request")
+  // async GetUrlOauth(@queryParam("mode") mode: "google" | "facebook" | "github", @response() res: Response) {
+  //   const queriesParams = new URLSearchParams({
+  //     client_id: config["GOOGLE_CLIENT_ID"],
+
+  //     redirect_uri: "http://localhost:5173",
+
+  //     response_type: 'code',
+
+  //     scope: 'openid profile email',
+
+  //     access_type: 'offline',
+
+  //     state: 'standard_oauth',
+
+  //     prompt: 'consent',
+
+  //   }
+  //   )
+  //   const redirectUrl = "http://localhost:80/api/v1/auth/oauth2"
+  //   const oAuth2Client = new OAuth2Client(
+  //     config["GOOGLE_CLIENT_ID"],
+  //     config["GOOGLE_CLIENT_SECRET"],
+  //     redirectUrl,
+  //   )
+  //   const authorizedUrl = oAuth2Client.generateAuthUrl({
+  //     access_type: "offline",
+  //     scope: 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email openid ',
+  //     prompt: "consent"
+  //   })
+  //   return res.json({
+  //     url: authorizedUrl
+  //   })
+  // }
+  @httpGet("/oauth-request", passportGoogle.authenticate("google", {
+    scope: ["profile", "email"],
+    // failureMessage: "lol",
+    // failureRedirect: "http://localhost:5173",
+    // successRedirect: "https://localhost:5173"
+  }))
+  @httpGet("/oauth2", passportGoogle.authenticate("google"))
+  async TestPCB(@request() req: Request, @response() res: Response) {
+    // console.log(req["_passport"]["instance"]["_strategies"]["google"])
+    // console.log(req.user)
+    // {
+    //   sub: '102323097327899576439',
+    //   name: 'Nguyên Hoàng',
+    //   given_name: 'Nguyên',
+    //   family_name: 'Hoàng',
+    //   picture: 'https://lh3.googleusercontent.com/a/ACg8ocKUd_44W1ahtqgRa5SG9G0wlGbJS1TvNcrRtAsViTv1=s96-c',
+    //   email: 'hoangnguyen403.2003@gmail.com',
+    //   email_verified: true,
+    //   locale: 'vi'
+    // }
+    res.redirect(config["ORIGIN"] + "/setup")
+  }
+
+  @httpGet("/oauth-request-github", passportGithub.authenticate("github", { scope: ['user:email'] }))
+  async OauthGithub() { }
+  @httpGet("/oauth2-github", passportGithub.authenticate("github"))
+  async OauthGithubCb(@request() req: Request, @response() res: Response) {
+    const user = req.user as GithubUserType
+    // const uri = "name=" + encodeURIComponent(user.displayName) + "&email=" + encodeURIComponent(user.em)
+    // console.log((uri));
+    // res.cookie("alo", "Hello", { maxAge: 60 * 1000 })
+    // res.redirect(config["ORIGIN"] + "/setup?" + uri)
+    console.log(user)
+  }
+  @httpGet("/oauth-request-facebook", passportFacebook.authenticate("facebook"))
+  async OauthFacebookb() { }
+  @httpGet("/oauth2-facebook", passportFacebook.authenticate("facebook"))
+  async OauthFacebookCb(@request() req: Request, @response() res: Response) {
+    const user = req.user
+    // const uri = "name=" + encodeURIComponent(user.displayName) + "&email=" + encodeURIComponent(user.em)
+    // console.log((uri));
+    // res.cookie("alo", "Hello", { maxAge: 60 * 1000 })
+    // res.redirect(config["ORIGIN"] + "/setup?" + uri)
+    console.log(user)
+  }
+  @httpGet("/login/success")
+  async LoginSuccess(@request() req: Request, @response() res: Response) {
+    console.log(req.user)
+    if (!req.user) {
+      throw new WrongCredentials()
+    }
+
+    const resp = await this._service.HandleCredential(req.user as StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>)
+    return res.cookie('rft', resp['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: "localhost", maxAge: 2 * 60 * 60 * 1000 }).json({
+      isLoginBefore: resp.isLoginBefore,
+      id: resp['userId'],
+      picture: resp["picture"],
+      email: resp['email'],
+      full_name: resp['fullName'],
+      user_name: resp['userName'],
+      access_token: resp['accessToken'],
+    });
+  }
+  @httpPost("/logout")
+  async Logout(@response() res: Response) {
+    // await this._service.TestCnt();
+    res.clearCookie("rft");
+  }
+  @httpPost("/update-status")
+  async UpdateStatusCode(@request() req: Request, @requestBody() body: { provider: string }, @response() res: Response) {
+    const { provider } = body
+    const id = req.header["x-id"]
+    await this._service.UpdateStatusLogin(id, provider)
+  }
+  // @httpGet("/oauth2")
+  // async GetData(@request() req: Request, @response() res: Response) {
+  //   // console.log(req.query["code"])
+  //   const code = req.query["code"]
+  //   const redirectUrl = "http://localhost:80/api/v1/auth/oauth2"
+  //   const oAuth2Client = new OAuth2Client(
+  //     config["GOOGLE_CLIENT_ID"],
+  //     config["GOOGLE_CLIENT_SECRET"],
+  //     redirectUrl,
+  //   )
+  //   const r = await oAuth2Client.getToken(code as string);
+  //   // oAuth2Client.setCredentials(r.tokens)
+
+  //   console.log(r.tokens.access_token)
+  //   // const ACT = oAuth2Client.credentials.access_token
+  //   const response = await axios.get(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${r.tokens.access_token}`);
+  //   console.log(response.data);
+
+  //   res.redirect("http://localhost:5173/setup?email")
+  // }
 }

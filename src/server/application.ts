@@ -2,7 +2,6 @@ import 'reflect-metadata';
 import './auth/v1/controller/auth.controller';
 
 import compression from 'compression';
-import Consul, { ConsulOptions } from 'consul';
 import cors from 'cors';
 import { randomUUID } from 'crypto';
 import express, { NextFunction, Request, Response } from 'express';
@@ -17,7 +16,8 @@ import { container } from './container';
 import { AbstractApplication } from './libs/base-application';
 import { BaseError, NotFound } from './libs/base-exception';
 import { RabbitMQClient } from './message-broker';
-
+import passport from 'passport';
+import session from "express-session"
 export class Application extends AbstractApplication {
   constructor(
     private PID = process.pid,
@@ -46,6 +46,17 @@ export class Application extends AbstractApplication {
           origin: ['https://' + config['ORIGIN'], 'https://www.' + config['ORIGIN'], config['ORIGIN']],
         }),
       );
+      app.use(session({
+        secret: "nah",
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+          secure: false,
+          maxAge: 10 * 10 * 1000
+        }
+      }))
+      app.use(passport.initialize())
+      app.use(passport.session())
     });
     server.setErrorConfig((app) => {
       app.use((_: Request, res: Response, next: NextFunction) => {
@@ -54,6 +65,7 @@ export class Application extends AbstractApplication {
       });
       app.use((error: BaseError, _: Request, res: Response, next: NextFunction) => {
         logger.error(error.message);
+        // res.header("Referrer-Policy", "no-referrer-when-downgrade")
         return res.status(error.statusCode || 500).json({
           status_code: error.statusCode || 500,
           message: error.message || 'internal server error',
@@ -66,70 +78,6 @@ export class Application extends AbstractApplication {
       console.log(`App is running in port ${config.port}`);
       RabbitMQClient.initialize('auth-queue');
       // this.registerConsul();
-    });
-  }
-  registerConsul() {
-    const consulOptions: ConsulOptions = {
-      host: config["CONSUL_URL"],
-      port: '8500',
-      secure: false,
-      promisify: false,
-    };
-    const details = {
-      name: 'auth-service',
-      address: this.HOST,
-      check: {
-        ttl: '10s',
-        interval: '5s',
-        deregister_critical_service_after: '1m',
-      },
-      port: this.PORT,
-      id: this.CONSUL_ID,
-    };
-
-    const consul = new Consul(consulOptions);
-
-    consul.agent.service.register(details, (err) => {
-      if (err) {
-        console.log(err);
-        throw new Error(err.toString());
-      }
-      console.log('registered with Consul');
-      setInterval(() => {
-        consul.agent.check.pass({ id: `service:${this.CONSUL_ID}` }, (err: any) => {
-          if (err) throw new Error(err);
-          // console.log('Send out heartbeat to consul');
-        });
-      }, 5 * 1000);
-
-      process.on('SIGINT', () => {
-        console.log('Process Terminating. De-Registering...');
-        let details = { id: this.CONSUL_ID };
-        consul.agent.service.deregister(details, (err) => {
-          console.log('de-registered.', err);
-          process.exit();
-        });
-      });
-    });
-
-    const watcher = consul.watch({
-      method: consul.health.checks,
-      options: {
-        key: 'data',
-      },
-    });
-    const known_data_instances: string[] = [];
-
-    watcher.on('change', (data, res) => {
-      console.log('received discovery update:', data);
-      data.forEach((entry: any) => {
-        known_data_instances.push(`http://${entry.Service.Address}:${entry.Service.Port}/`);
-      });
-      console.log(known_data_instances);
-    });
-
-    watcher.on('error', (err) => {
-      console.error('watch error', err);
     });
   }
 }

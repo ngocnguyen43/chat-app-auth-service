@@ -1,12 +1,12 @@
-import { inject, injectable } from 'inversify';
+import { id, inject, injectable } from 'inversify';
 import jwt, { UserJWTPayload } from 'jsonwebtoken';
 import { getService, logger } from '../../../common';
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuthRepository } from '../repository/auth.repository';
-import { TYPES } from '../@types';
+import { FacebookUserType, GithubUserType, GoogleUserType, StrictUnion, TYPES } from '../@types';
 import { RegisterDto } from '../controller/auth.controller';
 import { IPasswordLoginDto } from '@v1';
-import { InternalError, NotFound, WrongPassword } from '../../../libs/base-exception';
+import { InternalError, NotFound, WrongCredentials, WrongPassword } from '../../../libs/base-exception';
 import { generateKeyPairSync, randomUUID } from 'crypto';
 import util from 'util';
 
@@ -24,6 +24,7 @@ import {
 import base64url from 'base64url';
 import { ITokenRepository } from '../repository/token.repository';
 import { decode } from '../../../utils';
+import { v4 } from 'uuid';
 declare module 'jsonwebtoken' {
   interface UserJWTPayload extends jwt.JwtPayload {
     iss: string;
@@ -42,8 +43,47 @@ declare module 'jsonwebtoken' {
     jti: string;
   }
 }
+
+// google 
+// {
+//   "sub": string,
+//   "name": string,
+//   "given_name": string,
+//   "family_name": string,
+//   "picture": string,
+//   "email": string,
+//   "email_verified": boolean,
+//   "locale": string
+// }
+
+//github
+
+// {
+//   id: '136367099',
+//     nodeId: 'U_kgDOCCDL-w',
+//       displayName: 'Huỳnh Đăng Khoa',
+//         username: 'ngocnguyenm',
+//           profileUrl: 'https://github.com/ngocnguyenm',
+//             emails: [{ value: 'khoa_2151030161@dau.edu.vn' }],
+//               photos: [
+//                 { value: 'https://avatars.githubusercontent.com/u/136367099?v=4' }
+//               ],
+//                 provider: 'github',
+// }
+//facebook
+// {
+//   id: '1271712550216434',
+//   username: undefined,
+//   displayName: 'Minh Ngoc',
+//   name: {
+//     familyName: undefined,
+//     givenName: undefined,
+//     middleName: undefined
+//   },
+//   provider: 'facebook',
+// }
 export interface IAuhtService {
-  PasswordLogin(dto: IPasswordLoginDto, token: string): Promise<any>;
+  PasswordLogin(dto: IPasswordLoginDto): Promise<any>;
   Registration(dto: RegisterDto): Promise<any>;
   GoogleLogin(creadential: string): Promise<any>;
   GithubLogin(): Promise<any>;
@@ -58,6 +98,8 @@ export interface IAuhtService {
   Test(): Promise<any>;
   GetPublicKeyFromUserId(id: string): Promise<string>;
   TestCnt(): Promise<void>
+  HandleCredential(user: StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>): Promise<any>
+  UpdateStatusLogin(id: string, provider: string)
 }
 interface IMessageResponse {
   code: number;
@@ -75,6 +117,73 @@ export class AuthService implements IAuhtService {
     @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
   ) { }
+  async UpdateStatusLogin(id: string, provider: string) {
+    await this._authRepo.UpdateStatusLogin(id, provider)
+  }
+  async HandleSigninGoogle(dto: { email: string, userName: string, fullName: string, picture: string }) {
+    try {
+      const id = v4()
+      const { email, userName, fullName, picture } = dto
+      RabbitMQClient.messageProduce('user-queue', {
+        type: 'add-user',
+        payload: {
+          userId: id,
+          email,
+          userName,
+          fullName,
+          createdAt: Date.now().toString(),
+          updatedAt: Date.now().toString()
+        },
+      });
+      RabbitMQClient.messageProduce('chat-queue', {
+        type: 'add-user',
+        payload: {
+          userId: id,
+          fullName: fullName,
+        },
+      });
+      await this._authRepo.CreateOne({ id, createdAt: Date.now().toString(), updatedAt: Date.now().toString() });
+      await this._authRepo.AddOauth2(id, "google")
+      return {
+        isLoginBefore: false,
+        id,
+        picture,
+        email,
+        full_name: fullName,
+        user_name: userName,
+        provider: "goole"
+      };
+    } catch (error) {
+      console.log(error)
+      throw new WrongCredentials()
+    }
+  }
+  async HandleCredential(user: StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>): Promise<any> {
+    if (!user.provider) {
+      const res = (await RabbitMQClient.clientProduce('user-queue', {
+        type: 'get-user-by-email',
+        payload: { email: user.email },
+      })) as IMessageResponse;
+      if (res.code !== 1200) {
+        return this.HandleSigninGoogle({ email: user.email, userName: (user.given_name) as string + " " + (user.family_name as string), fullName: (user.given_name) as string + " " + (user.family_name as string), picture: user.picture })
+      }
+      const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "google")
+      try {
+        const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+        const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload, privateKey);
+        await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+        return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], picture: user.picture, provider: "google", accessToken, refreshToken };
+      } catch (error) {
+        console.log(error)
+      }
+    }
+    if (user.provider === "facebook") {
+
+    } else {
+
+    }
+
+  }
   async TestCnt(): Promise<void> {
     try {
 
@@ -132,11 +241,12 @@ export class AuthService implements IAuhtService {
       federation[0].some((item) => item.hasOwnProperty(federation[1]))
     );
   }
-  async PasswordLogin(dto: IPasswordLoginDto, refresh: string) {
+  async PasswordLogin(dto: IPasswordLoginDto) {
     const res = (await RabbitMQClient.clientProduce('user-queue', {
       type: 'get-user-by-email',
       payload: { email: dto.email },
     })) as IMessageResponse;
+    console.log(res.code)
     if (res.code !== 1200) {
       throw new NotFound();
     }
@@ -180,7 +290,7 @@ export class AuthService implements IAuhtService {
             fullName: dto.fullName,
           },
         });
-        const login = await this.PasswordLogin({ email: dto.email, password: dto.password }, "")
+        const login = await this.PasswordLogin({ email: dto.email, password: dto.password })
         return login;
       } catch (error) {
         logger.error(error['message']);

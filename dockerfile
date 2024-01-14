@@ -45,6 +45,7 @@ RUN wget -q -t3 'https://packages.doppler.com/public/cli/rsa.8004D9FF50437357.ke
     apk add doppler
 
 WORKDIR /usr/src
+ENV NODE_ENV production
 
 ARG DOPPLER_TOKEN
 
@@ -63,4 +64,4 @@ COPY --from=builder /usr/src/package.json ./package.json
 EXPOSE 6001
 
 # Define the command to start the application
-CMD [ "doppler","run","--","npm", "run", "start:prod" ]
+CMD [ "doppler","run","--","node", "./dist/bootstrap.js" ]
