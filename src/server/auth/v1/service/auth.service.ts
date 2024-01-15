@@ -86,9 +86,6 @@ export interface IAuhtService {
   PasswordLogin(dto: IPasswordLoginDto): Promise<any>;
   Registration(dto: RegisterDto): Promise<any>;
   GoogleLogin(creadential: string): Promise<any>;
-  GithubLogin(): Promise<any>;
-  FacebookLogin(): Promise<any>;
-  GooglePopupLogin(): Promise<any>;
   LoginOptions(email: string): Promise<any>;
   WebAuthnRegistrationOptions(email: string): Promise<any>;
   WebAuthnRegistrationVerification(credential: any): Promise<any>;
@@ -99,7 +96,8 @@ export interface IAuhtService {
   GetPublicKeyFromUserId(id: string): Promise<string>;
   TestCnt(): Promise<void>
   HandleCredential(user: StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>): Promise<any>
-  UpdateStatusLogin(id: string, provider: string)
+  UpdateStatusLogin(id: string, provider: string): Promise<void>
+  DeleteUser(id: string): Promise<void>
 }
 interface IMessageResponse {
   code: number;
@@ -117,6 +115,13 @@ export class AuthService implements IAuhtService {
     @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
   ) { }
+  async DeleteUser(id: string): Promise<void> {
+    try {
+      await this._authRepo.DeleteUser(id)
+    } catch (error) {
+      console.log(error)
+    }
+  }
   async UpdateStatusLogin(id: string, provider: string) {
     await this._authRepo.UpdateStatusLogin(id, provider)
   }
@@ -151,7 +156,7 @@ export class AuthService implements IAuhtService {
         email,
         fullName,
         userName,
-        provider: "goole"
+        provider: "google"
       };
     } catch (error) {
       console.log(error)
@@ -250,9 +255,9 @@ export class AuthService implements IAuhtService {
       const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "google")
       try {
         const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-        const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload, privateKey);
+        const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
         await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-        return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], picture: user.picture, provider: "google", accessToken, refreshToken };
+        return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: user.picture, provider: "google", accessToken, refreshToken };
       } catch (error) {
         console.log(error)
       }
@@ -268,9 +273,9 @@ export class AuthService implements IAuhtService {
       const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "facebook")
       try {
         const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-        const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload, privateKey);
+        const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
         await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-        return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png", provider: "github", accessToken, refreshToken };
+        return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png", provider: "github", accessToken, refreshToken };
       } catch (error) {
         console.log(error)
       }
@@ -285,9 +290,9 @@ export class AuthService implements IAuhtService {
       const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "github")
       try {
         const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-        const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload, privateKey);
+        const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
         await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-        return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], picture: user.photos[0].value, provider: "github", accessToken, refreshToken };
+        return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: user.photos[0].value, provider: "github", accessToken, refreshToken };
       } catch (error) {
         console.log(error)
       }
@@ -367,7 +372,7 @@ export class AuthService implements IAuhtService {
         throw new WrongPassword();
       }
       const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-      const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload, privateKey);
+      const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
       await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
       return { ok: 'OK', res: res['payload'], accessToken, refreshToken };
     }
@@ -449,9 +454,6 @@ export class AuthService implements IAuhtService {
     await this._authRepo.AddGoogle({ id: res.payload['userId'], email: decoded.email, aud: decoded.aud });
     return { fullname: decoded.family_name + decoded.given_name, email: decoded.email };
   }
-  GithubLogin = async () => { };
-  FacebookLogin = async () => { };
-  GooglePopupLogin = async () => { };
   async LoginOptions(email: string) {
     try {
       const target = await getService('user-service');

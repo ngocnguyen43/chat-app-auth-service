@@ -30,6 +30,7 @@ export interface IAuthRepository {
   AddOauth2(id: string, provider: string): Promise<void>
   CheckLoginBefore(id: string, provider: string): Promise<{ provider: string, isLoginBefore: boolean }>
   UpdateStatusLogin(id: string, provider: string): Promise<void>
+  DeleteUser(id: string): Promise<void>
 }
 @injectable()
 export class AuthRepository implements IAuthRepository {
@@ -37,6 +38,18 @@ export class AuthRepository implements IAuthRepository {
     @inject(TYPES.Prisma)
     private readonly _db: PrismaClient
   ) { }
+  async DeleteUser(id: string): Promise<void> {
+    const execute: string | any[] = [];
+    execute.push(
+      this._db.user.delete({
+        where: {
+          id
+        }
+      }),
+    );
+    await this._db.$transaction(execute);
+
+  }
   async UpdateStatusLogin(id: string, provider: string): Promise<void> {
     const otps = await this._db.authnOptions.findFirst({
       where: {

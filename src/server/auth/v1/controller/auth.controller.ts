@@ -1,15 +1,13 @@
 import { Request, Response } from 'express';
 import { inject } from 'inversify';
-import { controller, httpGet, httpPost, queryParam, request, requestBody, response } from 'inversify-express-utils';
+import { controller, httpGet, httpPost, request, requestBody, response } from 'inversify-express-utils';
 
-import { getService } from '../../../common';
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuhtService } from '../service/auth.service';
 import { FacebookUserType, GithubUserType, GoogleUserType, StrictUnion, TYPES } from '../@types';
 import { randomUUID } from 'crypto';
 import { Middlewares, RequestValidator } from '../middleware';
 import {
-  IGoogleLoginId,
   ILoginOptionsDto,
   IPasswordLoginDto,
   IWebAuthnLoginOptions,
@@ -19,8 +17,6 @@ import {
 import { container } from '../../../container';
 import { IMessageExecute } from '../../../message-broker/MessageExecute';
 import { config } from '../../../config';
-import { OAuth2Client } from 'google-auth-library';
-import axios from "axios"
 import { passportGoogle } from '../oauth2/google';
 import { passportGithub } from '../oauth2/github';
 import { passportFacebook } from '../oauth2/facebook';
@@ -52,17 +48,6 @@ export class AuthController {
       access_token: result['accessToken'],
     });
   }
-  @httpPost('/login-google')
-  async LoginGoogle(req: Request, res: Response) {
-    const target = await getService('user-service');
-    let result: Record<string, any>;
-    if (!target) {
-      result = { err: 503 };
-    } else {
-      result = await this.rabbitMq.clientProduce(target, { type: 'delete-user' });
-    }
-    return res.json(result);
-  }
   @httpPost('/login-options')
   async LoginOptions(@requestBody() dto: ILoginOptionsDto, @response() res: Response) {
     return res.json(await this._service.LoginOptions(dto.email));
@@ -70,17 +55,13 @@ export class AuthController {
   @httpPost('/login-password')
   async LoginPassword(@requestBody() dto: IPasswordLoginDto, @request() req: Request, @response() res: Response) {
     const result = await this._service.PasswordLogin(dto);
-    return res.cookie('rft', result['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: ".localhost", maxAge: 2 * 60 * 60 * 1000 }).json({
+    return res.cookie('rft', result['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 2 * 60 * 60 * 1000 }).json({
       id: result['res']['userId'],
       email: result['res']['email'],
       full_name: result['res']['fullName'],
       user_name: result['res']['userName'],
       access_token: result['accessToken'],
     });
-  }
-  @httpPost('/login-google-id')
-  async LoginGoogleId(@requestBody() dto: IGoogleLoginId, @response() res: Response) {
-    return res.json(await this._service.GoogleLogin(dto.credential));
   }
   @httpPost('/webauth-registration-options')
   async WebAuthnRegistrationOptions(@requestBody() dto: IWebAuthnRegisterOptions, @response() res: Response) {
@@ -217,9 +198,9 @@ export class AuthController {
     }
 
     const resp = await this._service.HandleCredential(req.user as StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>)
-    return res.cookie('rft', resp['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: "localhost", maxAge: 2 * 60 * 60 * 1000 }).json({
+    return res.cookie('rft', resp['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 2 * 60 * 60 * 1000 }).json({
       isLoginBefore: resp.isLoginBefore,
-      id: resp['userId'],
+      id: resp['id'],
       picture: resp["picture"],
       email: resp['email'],
       full_name: resp['fullName'],
