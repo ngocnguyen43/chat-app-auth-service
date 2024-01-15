@@ -193,7 +193,9 @@ export class AuthController {
     // console.log((uri));
     // res.cookie("alo", "Hello", { maxAge: 60 * 1000 })
     // res.redirect(config["ORIGIN"] + "/setup?" + uri)
-    console.log(user)
+    // console.log(user)
+    // await this._service.HandleCredential(user)
+    res.redirect(config["ORIGIN"] + "/setup")
   }
   @httpGet("/oauth-request-facebook", passportFacebook.authenticate("facebook"))
   async OauthFacebookb() { }
@@ -205,6 +207,7 @@ export class AuthController {
     // res.cookie("alo", "Hello", { maxAge: 60 * 1000 })
     // res.redirect(config["ORIGIN"] + "/setup?" + uri)
     console.log(user)
+    res.redirect(config["ORIGIN"] + "/setup")
   }
   @httpGet("/login/success")
   async LoginSuccess(@request() req: Request, @response() res: Response) {
@@ -222,6 +225,7 @@ export class AuthController {
       full_name: resp['fullName'],
       user_name: resp['userName'],
       access_token: resp['accessToken'],
+      provider: resp["provider"]
     });
   }
   @httpPost("/logout")

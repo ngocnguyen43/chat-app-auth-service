@@ -149,9 +149,89 @@ export class AuthService implements IAuhtService {
         id,
         picture,
         email,
-        full_name: fullName,
-        user_name: userName,
+        fullName,
+        userName,
         provider: "goole"
+      };
+    } catch (error) {
+      console.log(error)
+      throw new WrongCredentials()
+    }
+  }
+  async HandleSigninFacebook(dto: { id: string, displayName: string, picture: string }) {
+    try {
+      const userId = v4()
+      const { id, displayName: fullName, picture } = dto
+      RabbitMQClient.messageProduce('user-queue', {
+        type: 'add-user-provider',
+        payload: {
+          userId,
+          provider: {
+            provider: "facebook",
+            id
+          },
+          userName: fullName,
+          fullName,
+          createdAt: Date.now().toString(),
+          updatedAt: Date.now().toString()
+        },
+      });
+      RabbitMQClient.messageProduce('chat-queue', {
+        type: 'add-user',
+        payload: {
+          userId,
+          fullName,
+        },
+      });
+      await this._authRepo.CreateOne({ id: userId, createdAt: Date.now().toString(), updatedAt: Date.now().toString() });
+      await this._authRepo.AddOauth2(userId, "facebook")
+      return {
+        isLoginBefore: false,
+        id: userId,
+        picture,
+        fullName,
+        userName: fullName,
+        provider: "facebook"
+      };
+    } catch (error) {
+      console.log(error)
+      throw new WrongCredentials()
+    }
+  }
+  async HandleSigninGithub(dto: { id: string, displayName: string, picture: string }) {
+    try {
+      const userId = v4()
+      const { id, displayName: fullName, picture } = dto
+      RabbitMQClient.messageProduce('user-queue', {
+        type: 'add-user-provider',
+        payload: {
+          userId,
+          provider: {
+            provider: "github",
+            id
+          },
+          userName: fullName,
+          fullName,
+          createdAt: Date.now().toString(),
+          updatedAt: Date.now().toString()
+        },
+      });
+      RabbitMQClient.messageProduce('chat-queue', {
+        type: 'add-user',
+        payload: {
+          userId,
+          fullName,
+        },
+      });
+      await this._authRepo.CreateOne({ id: userId, createdAt: Date.now().toString(), updatedAt: Date.now().toString() });
+      await this._authRepo.AddOauth2(userId, "github")
+      return {
+        isLoginBefore: false,
+        id: userId,
+        picture,
+        fullName,
+        userName: fullName,
+        provider: "github"
       };
     } catch (error) {
       console.log(error)
@@ -178,9 +258,39 @@ export class AuthService implements IAuhtService {
       }
     }
     if (user.provider === "facebook") {
-
+      const res = (await RabbitMQClient.clientProduce('user-queue', {
+        type: 'get-user-by-provider',
+        payload: { provider: user.provider, id: user.id },
+      })) as IMessageResponse;
+      if (res.code !== 1200) {
+        return await this.HandleSigninFacebook({ id: user.id, displayName: user.displayName, picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png" })
+      }
+      const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "facebook")
+      try {
+        const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+        const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload, privateKey);
+        await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+        return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png", provider: "github", accessToken, refreshToken };
+      } catch (error) {
+        console.log(error)
+      }
     } else {
-
+      const res = (await RabbitMQClient.clientProduce('user-queue', {
+        type: 'get-user-by-provider',
+        payload: { provider: user.provider, id: user.id },
+      })) as IMessageResponse;
+      if (res.code !== 1200) {
+        return await this.HandleSigninGithub({ id: user.id, displayName: user.displayName, picture: user.photos[0].value })
+      }
+      const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "github")
+      try {
+        const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+        const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload, privateKey);
+        await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+        return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], picture: user.photos[0].value, provider: "github", accessToken, refreshToken };
+      } catch (error) {
+        console.log(error)
+      }
     }
 
   }
