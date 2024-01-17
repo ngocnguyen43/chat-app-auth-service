@@ -5,7 +5,7 @@ import { config } from "../../../config"
 export const passportGithub = passport.use(new GithubStartegy({
     clientID: config["GITHUB_CLIENT_ID"],
     clientSecret: config["GITHUB_CLIENT_SECRET"],
-    callbackURL: "http://localhost:80/api/v1/auth/oauth2-github",
+    callbackURL: config["  ORIGIN_API"] + "/auth/oauth2-facebook",
 
 }, (req, actk, rftk, profile, cb) => {
     cb(null, profile)

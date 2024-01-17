@@ -5,7 +5,7 @@ import { config } from "../../../config"
 export const passportGoogle = passport.use(new GoogleStartegy({
     clientID: config["GOOGLE_CLIENT_ID"],
     clientSecret: config["GOOGLE_CLIENT_SECRET"],
-    callbackURL: "http://localhost:80/api/v1/auth/oauth2",
+    callbackURL: config["  ORIGIN_API"] + "/auth/oauth2-facebook",
     passReqToCallback: true,
 
     state: true

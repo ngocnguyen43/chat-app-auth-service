@@ -13,5 +13,7 @@ export default {
   GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID || "",
   GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET || "",
   FACEBOOK_APP_ID: process.env.FACEBOOK_APP_ID || "",
-  FACEBOOK_APP_SECRET: process.env.FACEBOOK_APP_SECRET || ""
+  FACEBOOK_APP_SECRET: process.env.FACEBOOK_APP_SECRET || "",
+  ORIGIN_API: process.env.ORIGIN_API || '',
+
 };

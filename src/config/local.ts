@@ -8,6 +8,7 @@ export default {
   CONSUL_URL: process.env.CONSUL_HOST || '127.0.0.1',
   HOST_PORT: process.env.HOST_PORT || 6001,
   ORIGIN: process.env.ORIGIN_URL || '',
+  ORIGIN_API: process.env.ORIGIN_API || '',
   COOKIES_DOMAIN: process.env.COOKIES_DOMAIN || "",
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "",
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
