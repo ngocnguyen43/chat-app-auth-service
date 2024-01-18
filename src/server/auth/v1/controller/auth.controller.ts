@@ -151,7 +151,7 @@ export class AuthController {
   @httpGet("/oauth2", passportGoogle.authenticate("google"))
   async TestPCB(@request() req: Request, @response() res: Response) {
     // console.log(req["_passport"]["instance"]["_strategies"]["google"])
-    // console.log(req.user)
+    console.log(req)
     // {
     //   sub: '102323097327899576439',
     //   name: 'Nguyên Hoàng',

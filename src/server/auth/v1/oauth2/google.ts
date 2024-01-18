@@ -10,7 +10,7 @@ export const passportGoogle = passport.use(new GoogleStartegy({
 
     state: true
 }, async (req, accessToken, refreshToken, profile, cb) => {
-    // console.log("checkk:::", profile);
+    console.log("checkk:::", profile);
     req.user = profile._json
     cb(null, profile._json)
 }))
