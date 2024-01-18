@@ -22,6 +22,7 @@ import { passportGithub } from '../oauth2/github';
 import { passportFacebook } from '../oauth2/facebook';
 import { WrongCredentials } from '../../../libs/base-exception';
 import { encrypt } from '../../../utils';
+import { logger } from '../../../common/logging';
 export interface RegisterDto {
   userId: string;
   email: string;
@@ -180,7 +181,7 @@ export class AuthController {
     //   locale: 'vi'
     // }
     const url = process.env.NODE_ENV === "production" ? "https://" + config["ORIGIN"] + "/setup" : config["ORIGIN"] + "/setup"
-    console.log(url)
+    logger.info(url)
     res.redirect(url)
   }
 
