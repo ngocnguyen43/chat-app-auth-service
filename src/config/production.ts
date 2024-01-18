@@ -2,8 +2,8 @@ import * as dotenv from "dotenv"
 dotenv.config()
 export default {
   port: 4000,
-  redis_port: process.env.REDIS_PORT_PROD || 1051,
-  redis_host: process.env.REDIS_HOST || '',
+  REDIS_PORT: process.env.REDIS_PORT_DEV || 1051,
+  REDIS_HOST: process.env.REDIS_HOST || '127.0.0.1',
   MESSAGE_BROKER_URL: process.env.MESSAGE_BROKER_URL_DEV || '',
   CONSUL_URL: process.env.CONSUL_HOST_PROD || '',
   ORIGIN: process.env.ORIGIN_URL || '',

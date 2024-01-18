@@ -8,6 +8,7 @@ import express, { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { InversifyExpressServer } from 'inversify-express-utils';
 import morgan from 'morgan';
+import RedisStore from "connect-redis"
 import os from 'os';
 
 import { config } from '../config';
@@ -18,13 +19,14 @@ import { BaseError, NotFound } from './libs/base-exception';
 import { RabbitMQClient } from './message-broker';
 import passport from 'passport';
 import session from "express-session"
+import { redis } from './config';
+
+let redisStore = new RedisStore({
+  client: redis,
+  prefix: "ses:",
+})
 export class Application extends AbstractApplication {
   constructor(
-    private PID = process.pid,
-    private HOST = os.hostname(),
-    private PORT = config.port,
-    private CONSUL_ID = `${randomUUID()}`,
-    private HOST_PORT = config['HOST_PORT']
   ) {
     super();
   }
@@ -51,6 +53,7 @@ export class Application extends AbstractApplication {
         secret: "nah",
         resave: false,
         saveUninitialized: false,
+        store: redisStore,
         cookie: {
           secure: false,
           maxAge: 10 * 10 * 1000
