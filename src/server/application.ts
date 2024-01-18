@@ -48,7 +48,8 @@ export class Application extends AbstractApplication {
         saveUninitialized: false,
         cookie: {
           secure: false,
-          maxAge: 10 * 1000
+          maxAge: 10 * 1000,
+          httpOnly: false
         }
       }))
       app.use(passport.initialize())

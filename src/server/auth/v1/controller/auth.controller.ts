@@ -150,6 +150,7 @@ export class AuthController {
   // }
   @httpGet("/oauth-request", passportGoogle.authenticate("google", {
     scope: ["profile", "email"],
+    session: false
     // failureMessage: "lol",
     // failureRedirect: "http://localhost:5173",
     // successRedirect: "https://localhost:5173"
