@@ -283,8 +283,6 @@ export class AuthService implements IAuhtService {
     console.log(user.email);
 
     if (!user.provider) {
-      console.log("ok");
-
       const res = (await RabbitMQClient.clientProduce('user-queue', {
         type: 'get-user-by-email',
         payload: { email: user.email },

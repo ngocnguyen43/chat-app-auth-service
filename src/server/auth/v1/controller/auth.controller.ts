@@ -161,7 +161,6 @@ export class AuthController {
   async TestPCB(@request() req: Request, @response() res: Response) {
     // console.log(req["_passport"]["instance"]["_strategies"]["google"])
     const user = req.user as GoogleUserType
-    console.log(user);
 
     await this._service.HandleCredential(user)
     const ssid = encrypt(user.sub)
@@ -180,9 +179,8 @@ export class AuthController {
     //   email_verified: true,
     //   locale: 'vi'
     // }
-    const url = process.env.NODE_ENV === "production" ? "https://" + config["ORIGIN"] + "/setup" : config["ORIGIN"] + "/setup"
-    logger.info(url)
-    res.redirect(url)
+    const url = process.env.NODE_ENV === "production" ? "https://www." + config["ORIGIN"] + "/setup" : config["ORIGIN"] + "/setup"
+    res.redirect("https://google.com.vn")
   }
 
   @httpGet("/oauth-request-github", passportGithub.authenticate("github", { scope: ['user:email'] }))
