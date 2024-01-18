@@ -31,6 +31,7 @@ export class Application extends AbstractApplication {
   setup(): void | Promise<void> {
     const server = new InversifyExpressServer(container);
     server.setConfig((app) => {
+      app.set('trust proxy', 1);
       app.use(express.json());
       app.use(
         express.urlencoded({
