@@ -179,7 +179,8 @@ export class AuthController {
     //   email_verified: true,
     //   locale: 'vi'
     // }
-    res.redirect(config["ORIGIN"] + "/setup")
+    const url = process.env.NODE_ENV === "production" ? "https://" + config["ORIGIN"] + "/setup" : config["ORIGIN"] + "/setup"
+    res.redirect(url)
   }
 
   @httpGet("/oauth-request-github", passportGithub.authenticate("github", { scope: ['user:email'] }))
