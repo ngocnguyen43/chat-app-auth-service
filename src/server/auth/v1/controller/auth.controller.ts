@@ -155,7 +155,7 @@ export class AuthController {
     // successRedirect: "https://localhost:5173"
   }))
   @httpGet("/oauth2", passportGoogle.authenticate("google", {
-    failureRedirect: config["ORIGIN"] + "/signin",
+    // failureRedirect: config["ORIGIN"] + "/signin",
     session: false,
   }))
   async TestPCB(@request() req: Request, @response() res: Response) {
@@ -180,7 +180,7 @@ export class AuthController {
     //   locale: 'vi'
     // }
     const url = process.env.NODE_ENV === "production" ? "https://www." + config["ORIGIN"] + "/setup" : config["ORIGIN"] + "/setup"
-    res.redirect("https://google.com.vn")
+    res.redirect(url)
   }
 
   @httpGet("/oauth-request-github", passportGithub.authenticate("github", { scope: ['user:email'] }))
