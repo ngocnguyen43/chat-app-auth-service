@@ -23,7 +23,7 @@ import {
 } from '@simplewebauthn/server';
 import base64url from 'base64url';
 import { ITokenRepository } from '../repository/token.repository';
-import { decode } from '../../../utils';
+import { decode, decrypt, splitPartsKey } from '../../../utils';
 import { v4 } from 'uuid';
 declare module 'jsonwebtoken' {
   interface UserJWTPayload extends jwt.JwtPayload {
@@ -95,9 +95,10 @@ export interface IAuhtService {
   Test(): Promise<any>;
   GetPublicKeyFromUserId(id: string): Promise<string>;
   TestCnt(): Promise<void>
-  HandleCredential(user: StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>): Promise<any>
+  HandleCredential(user: StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>): Promise<void>
   UpdateStatusLogin(id: string, provider: string): Promise<void>
   DeleteUser(id: string): Promise<void>
+  HandleSetupCredential(ssid: string, provider: string, email: string | null): Promise<any>
 }
 interface IMessageResponse {
   code: number;
@@ -115,6 +116,58 @@ export class AuthService implements IAuhtService {
     @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
   ) { }
+  async HandleSetupCredential(ssid: string, provider: string, email: string | null): Promise<any> {
+    const splitSsid = splitPartsKey(ssid)
+
+    const userId = decrypt(splitSsid[1], splitSsid[0], splitSsid[2])
+    // res = (await RabbitMQClient.clientProduce('user-queue', {
+    //   type: 'get-user-by-provider',
+    //   payload: { provider, id: userId },
+    // })) as IMessageResponse;
+    let res: IMessageResponse
+    let userKey: { provider: string; isLoginBefore: boolean; };
+    if (provider === "google") {
+      res = (await RabbitMQClient.clientProduce('user-queue', {
+        type: 'get-user-by-email',
+        payload: { email: decodeURIComponent(email) },
+      })) as IMessageResponse;
+      userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "google")
+      // try {
+      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
+      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: user.picture, provider: "google", accessToken, refreshToken };
+      // } catch (error) {
+      //   console.log(error)
+      // }
+    }
+    else if (provider === "facebook") {
+      res = (await RabbitMQClient.clientProduce('user-queue', {
+        type: 'get-user-by-provider',
+        payload: { provider: provider, id: decodeURIComponent(userId) },
+      })) as IMessageResponse;
+
+      userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "facebook")
+      // try {
+      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
+      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png", provider: "github", accessToken, refreshToken };
+      // } catch (error) {
+      //   console.log(error)
+      // }
+    } else if (provider === "github") {
+      res = (await RabbitMQClient.clientProduce('user-queue', {
+        type: 'get-user-by-provider',
+        payload: { provider: provider, id: decodeURIComponent(userId) },
+      })) as IMessageResponse;
+
+    }
+    const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+    const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
+    await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+    return { isLoginBefore: userKey.isLoginBefore, id: res.payload["userId"], provider, accessToken, refreshToken, ...res.payload }
+  }
   async DeleteUser(id: string): Promise<void> {
     try {
       await this._authRepo.DeleteUser(id)
@@ -149,15 +202,6 @@ export class AuthService implements IAuhtService {
       });
       await this._authRepo.CreateOne({ id, createdAt: Date.now().toString(), updatedAt: Date.now().toString() });
       await this._authRepo.AddOauth2(id, "google")
-      return {
-        isLoginBefore: false,
-        id,
-        picture,
-        email,
-        fullName,
-        userName,
-        provider: "google"
-      };
     } catch (error) {
       console.log(error)
       throw new WrongCredentials()
@@ -190,14 +234,6 @@ export class AuthService implements IAuhtService {
       });
       await this._authRepo.CreateOne({ id: userId, createdAt: Date.now().toString(), updatedAt: Date.now().toString() });
       await this._authRepo.AddOauth2(userId, "facebook")
-      return {
-        isLoginBefore: false,
-        id: userId,
-        picture,
-        fullName,
-        userName: fullName,
-        provider: "facebook"
-      };
     } catch (error) {
       console.log(error)
       throw new WrongCredentials()
@@ -243,59 +279,63 @@ export class AuthService implements IAuhtService {
       throw new WrongCredentials()
     }
   }
-  async HandleCredential(user: StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>): Promise<any> {
+  async HandleCredential(user: StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>): Promise<void> {
+    console.log(user.email);
+
     if (!user.provider) {
+      console.log("ok");
+
       const res = (await RabbitMQClient.clientProduce('user-queue', {
         type: 'get-user-by-email',
         payload: { email: user.email },
       })) as IMessageResponse;
       if (res.code !== 1200) {
-        return this.HandleSigninGoogle({ email: user.email, userName: (user.given_name) as string + " " + (user.family_name as string), fullName: (user.given_name) as string + " " + (user.family_name as string), picture: user.picture })
+        await this.HandleSigninGoogle({ email: user.email, userName: (user.given_name) as string + " " + (user.family_name as string), fullName: (user.given_name) as string + " " + (user.family_name as string), picture: user.picture })
       }
-      const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "google")
-      try {
-        const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-        const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
-        await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-        return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: user.picture, provider: "google", accessToken, refreshToken };
-      } catch (error) {
-        console.log(error)
-      }
+      // const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "google")
+      // try {
+      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
+      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: user.picture, provider: "google", accessToken, refreshToken };
+      // } catch (error) {
+      //   console.log(error)
+      // }
     }
-    if (user.provider === "facebook") {
+    else if (user.provider === "facebook") {
       const res = (await RabbitMQClient.clientProduce('user-queue', {
         type: 'get-user-by-provider',
         payload: { provider: user.provider, id: user.id },
       })) as IMessageResponse;
       if (res.code !== 1200) {
-        return await this.HandleSigninFacebook({ id: user.id, displayName: user.displayName, picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png" })
+        await this.HandleSigninFacebook({ id: user.id, displayName: user.displayName, picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png" })
       }
-      const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "facebook")
-      try {
-        const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-        const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
-        await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-        return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png", provider: "github", accessToken, refreshToken };
-      } catch (error) {
-        console.log(error)
-      }
-    } else {
+      // const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "facebook")
+      // try {
+      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
+      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png", provider: "github", accessToken, refreshToken };
+      // } catch (error) {
+      //   console.log(error)
+      // }
+    } else if (user.provider === "github") {
       const res = (await RabbitMQClient.clientProduce('user-queue', {
         type: 'get-user-by-provider',
         payload: { provider: user.provider, id: user.id },
       })) as IMessageResponse;
       if (res.code !== 1200) {
-        return await this.HandleSigninGithub({ id: user.id, displayName: user.displayName, picture: user.photos[0].value })
+        await this.HandleSigninGithub({ id: user.id, displayName: user.displayName, picture: user.photos[0].value })
       }
-      const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "github")
-      try {
-        const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-        const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
-        await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-        return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: user.photos[0].value, provider: "github", accessToken, refreshToken };
-      } catch (error) {
-        console.log(error)
-      }
+      // const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "github")
+      // try {
+      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
+      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: user.photos[0].value, provider: "github", accessToken, refreshToken };
+      // } catch (error) {
+      //   console.log(error)
+      // }
     }
 
   }

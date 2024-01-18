@@ -1,6 +1,7 @@
 import { connect, Connection } from 'amqplib';
 import bcrypt from 'bcrypt';
 import { config } from '../config';
+import crypto from "crypto"
 
 export async function sleep(ms: number) {
   return new Promise<void>((resolve) => {
@@ -77,6 +78,7 @@ export function start() {
   });
 }
 export * from './contants';
+
 export const encode = async (password: string) => {
   const salt = await bcrypt.genSalt(10);
   return await bcrypt.hash(password, salt);
@@ -93,3 +95,28 @@ export const Options = (arr: any[]) => {
   });
   return obj;
 };
+export function encrypt(text: string) {
+  const encryption_key = crypto.randomBytes(16).toString('hex');
+  const initialization_vector = crypto.randomBytes(8).toString('hex');
+  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(encryption_key), Buffer.from(initialization_vector))
+  var crypted = cipher.update(text, 'utf8', 'hex')
+  crypted += cipher.final('hex')
+  return encryption_key + crypted + initialization_vector
+}
+
+export function decrypt(text: string, encryption_key: string, initialization_vector: string) {
+  const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(encryption_key), Buffer.from(initialization_vector))
+  let dec = decipher.update(text, 'hex', 'utf8')
+  dec += decipher.final('utf8')
+  return dec
+}
+
+//zod
+export function splitPartsKey(text: string) {
+  const middlePartLength = text.length - 32 - 16;
+  return [
+    text.substring(0, 32),
+    text.substring(32, 32 + middlePartLength),
+    text.substring(32 + middlePartLength)
+  ];
+}

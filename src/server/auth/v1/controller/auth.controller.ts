@@ -21,6 +21,7 @@ import { passportGoogle } from '../oauth2/google';
 import { passportGithub } from '../oauth2/github';
 import { passportFacebook } from '../oauth2/facebook';
 import { WrongCredentials } from '../../../libs/base-exception';
+import { encrypt } from '../../../utils';
 export interface RegisterDto {
   userId: string;
   email: string;
@@ -30,7 +31,11 @@ export interface RegisterDto {
   createdAt: string;
   updatedAt: string;
 }
-
+function extractValue(str: string, key: string) {
+  const regex = new RegExp(`${key}=([^&]+)`);
+  const match = regex.exec(str);
+  return match ? match[1] : null;
+}
 @controller('/api/v1/auth')
 export class AuthController {
   private rabbitMq = RabbitMQClient;
@@ -148,10 +153,22 @@ export class AuthController {
     // failureRedirect: "http://localhost:5173",
     // successRedirect: "https://localhost:5173"
   }))
-  @httpGet("/oauth2", passportGoogle.authenticate("google"))
+  @httpGet("/oauth2", passportGoogle.authenticate("google", {
+    failureRedirect: config["ORIGIN"] + "/signin",
+    session: false,
+  }))
   async TestPCB(@request() req: Request, @response() res: Response) {
     // console.log(req["_passport"]["instance"]["_strategies"]["google"])
-    console.log(req)
+    const user = req.user as GoogleUserType
+    console.log(user);
+
+    await this._service.HandleCredential(user)
+    const ssid = encrypt(user.sub)
+    res.cookie("_s", ssid, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
+    res.cookie("_avt", user.picture, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
+    res.cookie("_p", "google", { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
+    res.cookie("_e", user.email ?? "", { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
+
     // {
     //   sub: '102323097327899576439',
     //   name: 'Nguyên Hoàng',
@@ -191,22 +208,54 @@ export class AuthController {
     res.redirect(config["ORIGIN"] + "/setup")
   }
   @httpGet("/login/success")
-  async LoginSuccess(@request() req: Request, @response() res: Response) {
-    console.log(req.user)
-    if (!req.user) {
-      throw new WrongCredentials()
+  async LoginSuccess(@request() req: Request, @response() resp: Response) {
+    const data = req.headers.cookie.split("; ")
+    let avtValue = null;
+    let sValue = null
+    let pValue = null
+    let eValue = null
+    for (const item of data) {
+      avtValue = extractValue(item, "_avt");
+      if (avtValue !== null) {
+        break;
+      }
+    }
+    for (const item of data) {
+      sValue = extractValue(item, "_s");
+      if (sValue !== null) {
+        break;
+      }
+    }
+    for (const item of data) {
+      pValue = extractValue(item, "_p");
+      if (pValue !== null) {
+        break;
+      }
+    }
+    for (const item of data) {
+      eValue = extractValue(item, "_e");
+      if (eValue !== null) {
+        break;
+      }
     }
 
-    const resp = await this._service.HandleCredential(req.user as StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>)
-    return res.cookie('rft', resp['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 2 * 60 * 60 * 1000 }).json({
-      isLoginBefore: resp.isLoginBefore,
-      id: resp['id'],
-      picture: resp["picture"],
-      email: resp['email'],
-      full_name: resp['fullName'],
-      user_name: resp['userName'],
-      access_token: resp['accessToken'],
-      provider: resp["provider"]
+    // if (!req.user) {
+    //   throw new WrongCredentials()
+    // }
+    console.log(decodeURIComponent(eValue))
+    const res = await this._service.HandleSetupCredential(sValue, pValue, eValue)
+    // return {...res,}
+    resp.clearCookie("_p").clearCookie("_e").clearCookie("_s").clearCookie("_avt")
+    // const resp = await this._service.HandleCredential(req.user as StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>)
+    return resp.cookie('rft', resp['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 2 * 60 * 60 * 1000 }).json({
+      isLoginBefore: res.isLoginBefore,
+      id: res['id'],
+      picture: avtValue,
+      email: res['email'],
+      full_name: res['fullName'],
+      user_name: res['userName'],
+      access_token: res['accessToken'],
+      provider: res["provider"]
     });
   }
   @httpPost("/logout")
