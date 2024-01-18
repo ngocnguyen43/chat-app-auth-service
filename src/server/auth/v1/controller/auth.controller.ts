@@ -180,6 +180,7 @@ export class AuthController {
     //   locale: 'vi'
     // }
     const url = process.env.NODE_ENV === "production" ? "https://" + config["ORIGIN"] + "/setup" : config["ORIGIN"] + "/setup"
+    console.log(url)
     res.redirect(url)
   }
 
