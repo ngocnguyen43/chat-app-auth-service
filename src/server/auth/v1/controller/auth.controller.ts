@@ -4,7 +4,7 @@ import { controller, httpGet, httpPost, request, requestBody, response } from 'i
 
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuhtService } from '../service/auth.service';
-import { FacebookUserType, GithubUserType, GoogleUserType, StrictUnion, TYPES } from '../@types';
+import { FacebookUserType, GithubUserType, GoogleUserType, TYPES } from '../@types';
 import { randomUUID } from 'crypto';
 import { Middlewares, RequestValidator } from '../middleware';
 import {
@@ -14,15 +14,11 @@ import {
   IWebAuthnLoginVerification,
   IWebAuthnRegisterOptions,
 } from '@v1';
-import { container } from '../../../container';
-import { IMessageExecute } from '../../../message-broker/MessageExecute';
 import { config } from '../../../config';
 import { passportGoogle } from '../oauth2/google';
 import { passportGithub } from '../oauth2/github';
 import { passportFacebook } from '../oauth2/facebook';
-import { WrongCredentials } from '../../../libs/base-exception';
-import { encrypt } from '../../../utils';
-import { logger } from '../../../common/logging';
+import { encrypt, extractValue } from '../../../utils';
 export interface RegisterDto {
   userId: string;
   email: string;
@@ -32,11 +28,10 @@ export interface RegisterDto {
   createdAt: string;
   updatedAt: string;
 }
-function extractValue(str: string, key: string) {
-  const regex = new RegExp(`${key}=([^&]+)`);
-  const match = regex.exec(str);
-  return match ? match[1] : null;
-}
+
+const FE_URL = process.env.NODE_ENV === "production" ? "https://www." + config["ORIGIN"] : config["ORIGIN"]
+const FB_AVATAR = "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png"
+
 @controller('/api/v1/auth')
 export class AuthController {
   private rabbitMq = RabbitMQClient;
@@ -151,12 +146,9 @@ export class AuthController {
   @httpGet("/oauth-request", passportGoogle.authenticate("google", {
     scope: ["profile", "email"],
     session: false
-    // failureMessage: "lol",
-    // failureRedirect: "http://localhost:5173",
-    // successRedirect: "https://localhost:5173"
   }))
   @httpGet("/oauth2", passportGoogle.authenticate("google", {
-    // failureRedirect: config["ORIGIN"] + "/signin",
+    failureRedirect: FE_URL + "/signin",
     session: false,
   }))
   async TestPCB(@request() req: Request, @response() res: Response) {
@@ -180,34 +172,48 @@ export class AuthController {
     //   email_verified: true,
     //   locale: 'vi'
     // }
-    const url = process.env.NODE_ENV === "production" ? "https://www." + config["ORIGIN"] + "/setup" : config["ORIGIN"] + "/setup"
-    res.redirect(url)
+    res.redirect(FE_URL + "/setup")
   }
 
-  @httpGet("/oauth-request-github", passportGithub.authenticate("github", { scope: ['user:email'] }))
+  @httpGet("/oauth-request-github", passportGithub.authenticate("github", { scope: ['user:email'], session: false }))
   async OauthGithub() { }
-  @httpGet("/oauth2-github", passportGithub.authenticate("github"))
+  @httpGet("/oauth2-github", passportGithub.authenticate("github", {
+    session: false
+  }))
   async OauthGithubCb(@request() req: Request, @response() res: Response) {
     const user = req.user as GithubUserType
+    await this._service.HandleCredential(user)
+    const ssid = encrypt(user.id)
+
+
+    res.cookie("_s", ssid, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
+    res.cookie("_avt", user.photos[0].value, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
+    res.cookie("_p", "github", { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
     // const uri = "name=" + encodeURIComponent(user.displayName) + "&email=" + encodeURIComponent(user.em)
     // console.log((uri));
     // res.cookie("alo", "Hello", { maxAge: 60 * 1000 })
     // res.redirect(config["ORIGIN"] + "/setup?" + uri)
     // console.log(user)
     // await this._service.HandleCredential(user)
-    res.redirect(config["ORIGIN"] + "/setup")
+    res.redirect(FE_URL + "/setup")
   }
-  @httpGet("/oauth-request-facebook", passportFacebook.authenticate("facebook"))
+  @httpGet("/oauth-request-facebook", passportFacebook.authenticate("facebook", { session: false }))
   async OauthFacebookb() { }
-  @httpGet("/oauth2-facebook", passportFacebook.authenticate("facebook"))
+  @httpGet("/oauth2-facebook", passportFacebook.authenticate("facebook", { session: false }))
   async OauthFacebookCb(@request() req: Request, @response() res: Response) {
-    const user = req.user
+    const user = req.user as FacebookUserType
+    await this._service.HandleCredential(user)
+    const ssid = encrypt(user.id)
+
+    res.cookie("_s", ssid, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
+
+    res.cookie("_avt", FB_AVATAR, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
+    res.cookie("_p", "facebook", { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
     // const uri = "name=" + encodeURIComponent(user.displayName) + "&email=" + encodeURIComponent(user.em)
     // console.log((uri));
     // res.cookie("alo", "Hello", { maxAge: 60 * 1000 })
     // res.redirect(config["ORIGIN"] + "/setup?" + uri)
-    console.log(user)
-    res.redirect(config["ORIGIN"] + "/setup")
+    res.redirect(FE_URL + "/setup")
   }
   @httpGet("/login/success")
   async LoginSuccess(@request() req: Request, @response() resp: Response) {
@@ -240,16 +246,9 @@ export class AuthController {
         break;
       }
     }
-
-    // if (!req.user) {
-    //   throw new WrongCredentials()
-    // }
-    console.log(decodeURIComponent(eValue))
     const res = await this._service.HandleSetupCredential(sValue, pValue, eValue)
-    // return {...res,}
     resp.clearCookie("_p").clearCookie("_e").clearCookie("_s").clearCookie("_avt")
-    // const resp = await this._service.HandleCredential(req.user as StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>)
-    return resp.cookie('rft', resp['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 2 * 60 * 60 * 1000 }).json({
+    return resp.cookie('rft', res['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 2 * 60 * 60 * 1000 }).json({
       isLoginBefore: res.isLoginBefore,
       id: res['id'],
       picture: avtValue,
@@ -262,7 +261,6 @@ export class AuthController {
   }
   @httpPost("/logout")
   async Logout(@response() res: Response) {
-    // await this._service.TestCnt();
     res.clearCookie("rft");
   }
   @httpPost("/update-status")

@@ -120,3 +120,9 @@ export function splitPartsKey(text: string) {
     text.substring(32 + middlePartLength)
   ];
 }
+
+export function extractValue(str: string, key: string) {
+  const regex = new RegExp(`${key}=([^&]+)`);
+  const match = regex.exec(str);
+  return match ? match[1] : null;
+}

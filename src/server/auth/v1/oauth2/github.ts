@@ -11,15 +11,15 @@ export const passportGithub = passport.use(new GithubStartegy({
     cb(null, profile)
 }))
 
-passportGithub.serializeUser((user, cb) => {
-    // console.log(user)
-    process.nextTick(
-        () =>
-            cb(null, user)
-    )
-})
-passportGithub.deserializeUser(((id, cb) => {
-    process.nextTick(() =>
-        cb(null, id)
-    )
-}))
+// passportGithub.serializeUser((user, cb) => {
+//     // console.log(user)
+//     process.nextTick(
+//         () =>
+//             cb(null, user)
+//     )
+// })
+// passportGithub.deserializeUser(((id, cb) => {
+//     process.nextTick(() =>
+//         cb(null, id)
+//     )
+// }))

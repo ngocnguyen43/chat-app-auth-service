@@ -1,5 +1,5 @@
 import { id, inject, injectable } from 'inversify';
-import jwt, { UserJWTPayload } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import { getService, logger } from '../../../common';
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuthRepository } from '../repository/auth.repository';
@@ -8,7 +8,6 @@ import { RegisterDto } from '../controller/auth.controller';
 import { IPasswordLoginDto } from '@v1';
 import { InternalError, NotFound, WrongCredentials, WrongPassword } from '../../../libs/base-exception';
 import { generateKeyPairSync, randomUUID } from 'crypto';
-import util from 'util';
 
 import {
   GenerateAuthenticationOptionsOpts,
@@ -24,26 +23,6 @@ import {
 import base64url from 'base64url';
 import { ITokenRepository } from '../repository/token.repository';
 import { decode, decrypt, splitPartsKey } from '../../../utils';
-import { v4 } from 'uuid';
-declare module 'jsonwebtoken' {
-  interface UserJWTPayload extends jwt.JwtPayload {
-    iss: string;
-    nbf: number;
-    aud: string;
-    sub: string;
-    email: string;
-    email_verified: boolean;
-    azp: string;
-    name: string;
-    picture: string;
-    given_name: string;
-    family_name: string;
-    iat: number;
-    exp: number;
-    jti: string;
-  }
-}
-
 // google 
 // {
 //   "sub": string,
@@ -85,7 +64,6 @@ declare module 'jsonwebtoken' {
 export interface IAuhtService {
   PasswordLogin(dto: IPasswordLoginDto): Promise<any>;
   Registration(dto: RegisterDto): Promise<any>;
-  GoogleLogin(creadential: string): Promise<any>;
   LoginOptions(email: string): Promise<any>;
   WebAuthnRegistrationOptions(email: string): Promise<any>;
   WebAuthnRegistrationVerification(credential: any): Promise<any>;
@@ -106,9 +84,7 @@ interface IMessageResponse {
   payload: any;
 }
 type ValidOption = [object[], string];
-export const verifyPromise = () => {
-  util.promisify(jwt.verify);
-};
+
 
 @injectable()
 export class AuthService implements IAuhtService {
@@ -161,6 +137,7 @@ export class AuthService implements IAuhtService {
         type: 'get-user-by-provider',
         payload: { provider: provider, id: decodeURIComponent(userId) },
       })) as IMessageResponse;
+      userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "github")
 
     }
     const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
@@ -180,7 +157,7 @@ export class AuthService implements IAuhtService {
   }
   async HandleSigninGoogle(dto: { email: string, userName: string, fullName: string, picture: string }) {
     try {
-      const id = v4()
+      const id = randomUUID()
       const { email, userName, fullName, picture } = dto
       RabbitMQClient.messageProduce('user-queue', {
         type: 'add-user',
@@ -209,7 +186,7 @@ export class AuthService implements IAuhtService {
   }
   async HandleSigninFacebook(dto: { id: string, displayName: string, picture: string }) {
     try {
-      const userId = v4()
+      const userId = randomUUID()
       const { id, displayName: fullName, picture } = dto
       RabbitMQClient.messageProduce('user-queue', {
         type: 'add-user-provider',
@@ -241,7 +218,7 @@ export class AuthService implements IAuhtService {
   }
   async HandleSigninGithub(dto: { id: string, displayName: string, picture: string }) {
     try {
-      const userId = v4()
+      const userId = randomUUID()
       const { id, displayName: fullName, picture } = dto
       RabbitMQClient.messageProduce('user-queue', {
         type: 'add-user-provider',
@@ -450,47 +427,6 @@ export class AuthService implements IAuhtService {
       }
     }
     return { message: 'email already in used!' };
-  }
-  async GoogleLogin(credential: string) {
-    const decoded = jwt.decode(credential) as UserJWTPayload;
-    const target = await getService('user-service');
-    if (!target) {
-      throw new InternalError();
-    }
-    const res = (await RabbitMQClient.clientProduce(target, {
-      type: 'get-user-by-email',
-      payload: { email: decoded.email },
-    })) as IMessageResponse;
-    const userId = randomUUID();
-    if (res.code !== 1200) {
-      try {
-        RabbitMQClient.messageProduce(target, {
-          type: 'add-user',
-          payload: {
-            userId: userId,
-            email: decoded.email,
-            fullName: decoded.given_name + ' ' + decoded.family_name,
-          },
-        });
-        //add user
-        const unixTimestamp = Date.now().toString();
-        await this._authRepo.CreateOne({ id: userId, createdAt: unixTimestamp, updatedAt: unixTimestamp });
-        //add google in authn_opotions
-        await this._authRepo.AddGoogle({ id: userId, email: decoded.email, aud: decoded.aud });
-        //return
-        return { fullname: decoded.given_name + ' ' + decoded.family_name, email: decoded.email };
-      } catch (error) {
-        console.log(error);
-        throw error;
-      }
-    }
-
-    const option = await this._authRepo.FindOneWithKeyValue(res.payload['userId'], 'google', 'oauth');
-    if (option && this.checkValidOption([option.key['value'], 'google'], [option.key['federated'], 'google'])) {
-      return { fullname: decoded.family_name + decoded.given_name, email: decoded.email };
-    }
-    await this._authRepo.AddGoogle({ id: res.payload['userId'], email: decoded.email, aud: decoded.aud });
-    return { fullname: decoded.family_name + decoded.given_name, email: decoded.email };
   }
   async LoginOptions(email: string) {
     try {

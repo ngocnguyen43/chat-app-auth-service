@@ -3,7 +3,6 @@ import './auth/v1/controller/auth.controller';
 
 import compression from 'compression';
 import cors from 'cors';
-import { randomUUID } from 'crypto';
 import express, { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { InversifyExpressServer } from 'inversify-express-utils';
@@ -16,7 +15,6 @@ import { AbstractApplication } from './libs/base-application';
 import { BaseError, NotFound } from './libs/base-exception';
 import { RabbitMQClient } from './message-broker';
 import passport from 'passport';
-import session from "express-session"
 
 export class Application extends AbstractApplication {
   constructor(
@@ -42,18 +40,7 @@ export class Application extends AbstractApplication {
           origin: ['https://' + config['ORIGIN'], 'https://www.' + config['ORIGIN'], config['ORIGIN']],
         }),
       );
-      app.use(session({
-        secret: "nah",
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-          secure: false,
-          maxAge: 10 * 1000,
-          httpOnly: false
-        }
-      }))
       app.use(passport.initialize())
-      app.use(passport.session())
     });
     server.setErrorConfig((app) => {
       app.use((_: Request, res: Response, next: NextFunction) => {
@@ -74,7 +61,6 @@ export class Application extends AbstractApplication {
     app.listen(config.port, () => {
       console.log(`App is running in port ${config.port}`);
       RabbitMQClient.initialize('auth-queue');
-      // this.registerConsul();
     });
   }
 }
