@@ -256,7 +256,7 @@ export class AuthController {
       full_name: res['fullName'],
       user_name: res['userName'],
       access_token: res['accessToken'],
-      provider: res["provider"]
+      provider: pValue
     });
   }
   @httpPost("/logout")
@@ -264,9 +264,10 @@ export class AuthController {
     res.clearCookie("rft");
   }
   @httpPost("/update-status")
-  async UpdateStatusCode(@request() req: Request, @requestBody() body: { provider: string }, @response() res: Response) {
-    const { provider } = body
-    const id = req.header["x-id"]
+  async UpdateStatusCode(@request() req: Request, @requestBody() body: { provider: string, id: string }, @response() res: Response) {
+    const { provider, id } = body
+    console.log(body);
+
     await this._service.UpdateStatusLogin(id, provider)
   }
   // @httpGet("/oauth2")
