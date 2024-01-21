@@ -1,23 +1,3 @@
-# FROM node:18-alpine3.15
-# # Create app directory
-# WORKDIR /usr/src/app
-# # Install app dependencies
-# # A wildcard is used to ensure both package.json AND package-lock.json are copied
-# # where available (npm@5+)
-# COPY package*.json ./
-# COPY prisma ./prisma/
-
-# COPY . .
-# RUN npm install \
-#     && npm run build \
-#     && rm -rf node_modules \
-#     && npm install --production
-
-# # If you are building your code for production
-# # RUN npm ci --omit=dev
-# EXPOSE 4000
-# CMD [ "npm","run","start:prod" ]
-# Stage 1: Build the application
 FROM node:18 as builder
 
 # Set the working directory in the builder stage
@@ -45,10 +25,12 @@ RUN wget -q -t3 'https://packages.doppler.com/public/cli/rsa.8004D9FF50437357.ke
     apk add doppler
 
 WORKDIR /usr/src
+ENV NODE_ENV production
 
 ARG DOPPLER_TOKEN
 
 ENV DOPPLER_TOKEN ${DOPPLER_TOKEN}
+ENV NODE_ENV production
 # Copy only the necessary artifacts from the builder stage
 COPY --from=builder /usr/src/dist ./dist
 COPY --from=builder /usr/src/prisma ./prisma
@@ -62,4 +44,4 @@ COPY --from=builder /usr/src/package.json ./package.json
 EXPOSE 6001
 
 # Define the command to start the application
-CMD [ "doppler","run","--","npm", "run", "start:prod" ]
+CMD [ "doppler","run","--","node", "./dist/bootstrap.js" ]

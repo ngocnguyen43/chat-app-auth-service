@@ -7,7 +7,7 @@ export interface IMessageExecute {
 }
 @injectable()
 export class MessageExecute implements IMessageExecute {
-  constructor(@inject(TYPES.AuthService) private readonly _service: IAuhtService) {}
+  constructor(@inject(TYPES.AuthService) private readonly _service: IAuhtService) { }
   async execute(name: string, payload: any): Promise<unknown> {
     let res: unknown;
     switch (name) {
@@ -41,7 +41,7 @@ export class MessageExecute implements IMessageExecute {
       case 'get-user-by-email':
         break;
       case 'delete-user':
-        res = { 'delete-user': 'ok' };
+        this._service.DeleteUser(payload["id"] as string)
         break;
       case 'test':
         res = { ok: 'OK' };

@@ -1,14 +1,13 @@
-import { inject, injectable } from 'inversify';
-import jwt, { UserJWTPayload } from 'jsonwebtoken';
+import { id, inject, injectable } from 'inversify';
+import jwt from 'jsonwebtoken';
 import { getService, logger } from '../../../common';
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuthRepository } from '../repository/auth.repository';
-import { TYPES } from '../@types';
+import { FacebookUserType, GithubUserType, GoogleUserType, StrictUnion, TYPES } from '../@types';
 import { RegisterDto } from '../controller/auth.controller';
 import { IPasswordLoginDto } from '@v1';
-import { InternalError, NotFound, WrongPassword } from '../../../libs/base-exception';
+import { InternalError, NotFound, WrongCredentials, WrongPassword } from '../../../libs/base-exception';
 import { generateKeyPairSync, randomUUID } from 'crypto';
-import util from 'util';
 
 import {
   GenerateAuthenticationOptionsOpts,
@@ -23,32 +22,48 @@ import {
 } from '@simplewebauthn/server';
 import base64url from 'base64url';
 import { ITokenRepository } from '../repository/token.repository';
-import { decode } from '../../../utils';
-declare module 'jsonwebtoken' {
-  interface UserJWTPayload extends jwt.JwtPayload {
-    iss: string;
-    nbf: number;
-    aud: string;
-    sub: string;
-    email: string;
-    email_verified: boolean;
-    azp: string;
-    name: string;
-    picture: string;
-    given_name: string;
-    family_name: string;
-    iat: number;
-    exp: number;
-    jti: string;
-  }
-}
+import { decode, decrypt, splitPartsKey } from '../../../utils';
+// google 
+// {
+//   "sub": string,
+//   "name": string,
+//   "given_name": string,
+//   "family_name": string,
+//   "picture": string,
+//   "email": string,
+//   "email_verified": boolean,
+//   "locale": string
+// }
+
+//github
+
+// {
+//   id: '136367099',
+//     nodeId: 'U_kgDOCCDL-w',
+//       displayName: 'Huỳnh Đăng Khoa',
+//         username: 'ngocnguyenm',
+//           profileUrl: 'https://github.com/ngocnguyenm',
+//             emails: [{ value: 'khoa_2151030161@dau.edu.vn' }],
+//               photos: [
+//                 { value: 'https://avatars.githubusercontent.com/u/136367099?v=4' }
+//               ],
+//                 provider: 'github',
+// }
+//facebook
+// {
+//   id: '1271712550216434',
+//   username: undefined,
+//   displayName: 'Minh Ngoc',
+//   name: {
+//     familyName: undefined,
+//     givenName: undefined,
+//     middleName: undefined
+//   },
+//   provider: 'facebook',
+// }
 export interface IAuhtService {
-  PasswordLogin(dto: IPasswordLoginDto, token: string): Promise<any>;
+  PasswordLogin(dto: IPasswordLoginDto): Promise<any>;
   Registration(dto: RegisterDto): Promise<any>;
-  GoogleLogin(creadential: string): Promise<any>;
-  GithubLogin(): Promise<any>;
-  FacebookLogin(): Promise<any>;
-  GooglePopupLogin(): Promise<any>;
   LoginOptions(email: string): Promise<any>;
   WebAuthnRegistrationOptions(email: string): Promise<any>;
   WebAuthnRegistrationVerification(credential: any): Promise<any>;
@@ -58,6 +73,10 @@ export interface IAuhtService {
   Test(): Promise<any>;
   GetPublicKeyFromUserId(id: string): Promise<string>;
   TestCnt(): Promise<void>
+  HandleCredential(user: StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>): Promise<void>
+  UpdateStatusLogin(id: string, provider: string): Promise<void>
+  DeleteUser(id: string): Promise<void>
+  HandleSetupCredential(ssid: string, provider: string, email: string | null): Promise<any>
 }
 interface IMessageResponse {
   code: number;
@@ -65,9 +84,7 @@ interface IMessageResponse {
   payload: any;
 }
 type ValidOption = [object[], string];
-export const verifyPromise = () => {
-  util.promisify(jwt.verify);
-};
+
 
 @injectable()
 export class AuthService implements IAuhtService {
@@ -75,6 +92,228 @@ export class AuthService implements IAuhtService {
     @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
   ) { }
+  async HandleSetupCredential(ssid: string, provider: string, email: string | null): Promise<any> {
+    const splitSsid = splitPartsKey(ssid)
+
+    const userId = decrypt(splitSsid[1], splitSsid[0], splitSsid[2])
+    // res = (await RabbitMQClient.clientProduce('user-queue', {
+    //   type: 'get-user-by-provider',
+    //   payload: { provider, id: userId },
+    // })) as IMessageResponse;
+    let res: IMessageResponse
+    let userKey: { provider: string; isLoginBefore: boolean; };
+    if (provider === "google") {
+      res = (await RabbitMQClient.clientProduce('user-queue', {
+        type: 'get-user-by-email',
+        payload: { email: decodeURIComponent(email) },
+      })) as IMessageResponse;
+      userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "google")
+      // try {
+      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
+      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: user.picture, provider: "google", accessToken, refreshToken };
+      // } catch (error) {
+      //   console.log(error)
+      // }
+    }
+    else if (provider === "facebook") {
+      res = (await RabbitMQClient.clientProduce('user-queue', {
+        type: 'get-user-by-provider',
+        payload: { provider: provider, id: decodeURIComponent(userId) },
+      })) as IMessageResponse;
+
+      userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "facebook")
+      // try {
+      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
+      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png", provider: "github", accessToken, refreshToken };
+      // } catch (error) {
+      //   console.log(error)
+      // }
+    } else if (provider === "github") {
+      res = (await RabbitMQClient.clientProduce('user-queue', {
+        type: 'get-user-by-provider',
+        payload: { provider: provider, id: decodeURIComponent(userId) },
+      })) as IMessageResponse;
+      userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "github")
+
+    }
+    const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+    const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
+    await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+    return { isLoginBefore: userKey.isLoginBefore, id: res.payload["userId"], provider, accessToken, refreshToken, ...res.payload }
+  }
+  async DeleteUser(id: string): Promise<void> {
+    try {
+      await this._authRepo.DeleteUser(id)
+    } catch (error) {
+      console.log(error)
+    }
+  }
+  async UpdateStatusLogin(id: string, provider: string) {
+    await this._authRepo.UpdateStatusLogin(id, provider)
+  }
+  async HandleSigninGoogle(dto: { email: string, userName: string, fullName: string, picture: string }) {
+    try {
+      const id = randomUUID()
+      const { email, userName, fullName, picture } = dto
+      RabbitMQClient.messageProduce('user-queue', {
+        type: 'add-user',
+        payload: {
+          userId: id,
+          email,
+          userName,
+          fullName,
+          createdAt: Date.now().toString(),
+          updatedAt: Date.now().toString()
+        },
+      });
+      RabbitMQClient.messageProduce('chat-queue', {
+        type: 'add-user',
+        payload: {
+          userId: id,
+          fullName: fullName,
+        },
+      });
+      await this._authRepo.CreateOne({ id, createdAt: Date.now().toString(), updatedAt: Date.now().toString() });
+      await this._authRepo.AddOauth2(id, "google")
+    } catch (error) {
+      console.log(error)
+      throw new WrongCredentials()
+    }
+  }
+  async HandleSigninFacebook(dto: { id: string, displayName: string, picture: string }) {
+    try {
+      const userId = randomUUID()
+      const { id, displayName: fullName, picture } = dto
+      RabbitMQClient.messageProduce('user-queue', {
+        type: 'add-user-provider',
+        payload: {
+          userId,
+          provider: {
+            provider: "facebook",
+            id
+          },
+          userName: fullName,
+          fullName,
+          createdAt: Date.now().toString(),
+          updatedAt: Date.now().toString()
+        },
+      });
+      RabbitMQClient.messageProduce('chat-queue', {
+        type: 'add-user',
+        payload: {
+          userId,
+          fullName,
+        },
+      });
+      await this._authRepo.CreateOne({ id: userId, createdAt: Date.now().toString(), updatedAt: Date.now().toString() });
+      await this._authRepo.AddOauth2(userId, "facebook")
+    } catch (error) {
+      console.log(error)
+      throw new WrongCredentials()
+    }
+  }
+  async HandleSigninGithub(dto: { id: string, displayName: string, picture: string }) {
+    try {
+      const userId = randomUUID()
+      const { id, displayName: fullName, picture } = dto
+      RabbitMQClient.messageProduce('user-queue', {
+        type: 'add-user-provider',
+        payload: {
+          userId,
+          provider: {
+            provider: "github",
+            id
+          },
+          userName: fullName,
+          fullName,
+          createdAt: Date.now().toString(),
+          updatedAt: Date.now().toString()
+        },
+      });
+      RabbitMQClient.messageProduce('chat-queue', {
+        type: 'add-user',
+        payload: {
+          userId,
+          fullName,
+        },
+      });
+      await this._authRepo.CreateOne({ id: userId, createdAt: Date.now().toString(), updatedAt: Date.now().toString() });
+      await this._authRepo.AddOauth2(userId, "github")
+      return {
+        isLoginBefore: false,
+        id: userId,
+        picture,
+        fullName,
+        userName: fullName,
+        provider: "github"
+      };
+    } catch (error) {
+      console.log(error)
+      throw new WrongCredentials()
+    }
+  }
+  async HandleCredential(user: StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>): Promise<void> {
+    console.log(user.email);
+
+    if (!user.provider) {
+      const res = (await RabbitMQClient.clientProduce('user-queue', {
+        type: 'get-user-by-email',
+        payload: { email: user.email },
+      })) as IMessageResponse;
+      if (res.code !== 1200) {
+        await this.HandleSigninGoogle({ email: user.email, userName: (user.given_name) as string + " " + (user.family_name as string), fullName: (user.given_name) as string + " " + (user.family_name as string), picture: user.picture })
+      }
+      // const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "google")
+      // try {
+      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
+      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: user.picture, provider: "google", accessToken, refreshToken };
+      // } catch (error) {
+      //   console.log(error)
+      // }
+    }
+    else if (user.provider === "facebook") {
+      const res = (await RabbitMQClient.clientProduce('user-queue', {
+        type: 'get-user-by-provider',
+        payload: { provider: user.provider, id: user.id },
+      })) as IMessageResponse;
+      if (res.code !== 1200) {
+        await this.HandleSigninFacebook({ id: user.id, displayName: user.displayName, picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png" })
+      }
+      // const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "facebook")
+      // try {
+      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
+      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png", provider: "github", accessToken, refreshToken };
+      // } catch (error) {
+      //   console.log(error)
+      // }
+    } else if (user.provider === "github") {
+      const res = (await RabbitMQClient.clientProduce('user-queue', {
+        type: 'get-user-by-provider',
+        payload: { provider: user.provider, id: user.id },
+      })) as IMessageResponse;
+      if (res.code !== 1200) {
+        await this.HandleSigninGithub({ id: user.id, displayName: user.displayName, picture: user.photos[0].value })
+      }
+      // const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "github")
+      // try {
+      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
+      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: user.photos[0].value, provider: "github", accessToken, refreshToken };
+      // } catch (error) {
+      //   console.log(error)
+      // }
+    }
+
+  }
   async TestCnt(): Promise<void> {
     try {
 
@@ -132,11 +371,12 @@ export class AuthService implements IAuhtService {
       federation[0].some((item) => item.hasOwnProperty(federation[1]))
     );
   }
-  async PasswordLogin(dto: IPasswordLoginDto, refresh: string) {
+  async PasswordLogin(dto: IPasswordLoginDto) {
     const res = (await RabbitMQClient.clientProduce('user-queue', {
       type: 'get-user-by-email',
       payload: { email: dto.email },
     })) as IMessageResponse;
+    console.log(res.code)
     if (res.code !== 1200) {
       throw new NotFound();
     }
@@ -147,7 +387,7 @@ export class AuthService implements IAuhtService {
         throw new WrongPassword();
       }
       const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-      const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload, privateKey);
+      const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
       await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
       return { ok: 'OK', res: res['payload'], accessToken, refreshToken };
     }
@@ -180,57 +420,14 @@ export class AuthService implements IAuhtService {
             fullName: dto.fullName,
           },
         });
-        return { message: 'success' };
+        const login = await this.PasswordLogin({ email: dto.email, password: dto.password })
+        return login;
       } catch (error) {
         logger.error(error['message']);
       }
     }
-    return { message: 'conflict' };
+    return { message: 'email already in used!' };
   }
-  async GoogleLogin(credential: string) {
-    const decoded = jwt.decode(credential) as UserJWTPayload;
-    const target = await getService('user-service');
-    if (!target) {
-      throw new InternalError();
-    }
-    const res = (await RabbitMQClient.clientProduce(target, {
-      type: 'get-user-by-email',
-      payload: { email: decoded.email },
-    })) as IMessageResponse;
-    const userId = randomUUID();
-    if (res.code !== 1200) {
-      try {
-        RabbitMQClient.messageProduce(target, {
-          type: 'add-user',
-          payload: {
-            userId: userId,
-            email: decoded.email,
-            fullName: decoded.given_name + ' ' + decoded.family_name,
-          },
-        });
-        //add user
-        const unixTimestamp = Date.now().toString();
-        await this._authRepo.CreateOne({ id: userId, createdAt: unixTimestamp, updatedAt: unixTimestamp });
-        //add google in authn_opotions
-        await this._authRepo.AddGoogle({ id: userId, email: decoded.email, aud: decoded.aud });
-        //return
-        return { fullname: decoded.given_name + ' ' + decoded.family_name, email: decoded.email };
-      } catch (error) {
-        console.log(error);
-        throw error;
-      }
-    }
-
-    const option = await this._authRepo.FindOneWithKeyValue(res.payload['userId'], 'google', 'oauth');
-    if (option && this.checkValidOption([option.key['value'], 'google'], [option.key['federated'], 'google'])) {
-      return { fullname: decoded.family_name + decoded.given_name, email: decoded.email };
-    }
-    await this._authRepo.AddGoogle({ id: res.payload['userId'], email: decoded.email, aud: decoded.aud });
-    return { fullname: decoded.family_name + decoded.given_name, email: decoded.email };
-  }
-  GithubLogin = async () => { };
-  FacebookLogin = async () => { };
-  GooglePopupLogin = async () => { };
   async LoginOptions(email: string) {
     try {
       const target = await getService('user-service');

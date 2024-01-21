@@ -5,7 +5,7 @@ dotenv.config();
 // make sure NODE_ENV is set
 process.env.NODE_ENV = process.env.NODE_ENV || 'development';
 
-const stage = process.env.STAGE || 'local';
+const stage = process.env.STAGE || 'dev';
 let envConfig;
 
 // dynamically require each config depending on the stage we're in
