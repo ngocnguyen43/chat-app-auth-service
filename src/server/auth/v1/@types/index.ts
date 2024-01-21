@@ -42,3 +42,47 @@ export interface IEnvironment {
     publicKeyPath?: string;
   };
 }
+
+export type GoogleUserType =
+  {
+    sub: string,
+    name: string,
+    given_name: string,
+    family_name: string,
+    picture: string,
+    email: string,
+    email_verified: boolean,
+    locale: string
+  }
+export type GithubUserType =
+  {
+    id: string,
+    nodeId: string,
+    displayName: string,
+    username: string,
+    profileUrl: string,
+    photos: [
+      { value: string }
+    ],
+    provider: 'github',
+  }
+
+export type FacebookUserType =
+  {
+    id: string,
+    username: string | undefined,
+    displayName: string,
+    name: {
+      familyName: string | undefined,
+      givenName: string | undefined,
+      middleName: string | undefined
+    },
+    provider: 'facebook',
+  }
+
+type UnionKeys<T> = T extends T ? keyof T : never;
+type StrictUnionHelper<T, TAll> =
+  T extends any
+  ? T & Partial<Record<Exclude<UnionKeys<TAll>, keyof T>, never>> : never;
+
+export type StrictUnion<T> = StrictUnionHelper<T, T>

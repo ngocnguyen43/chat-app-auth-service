@@ -13,7 +13,7 @@ type CreateTokens = {
   refreshToken: string;
 };
 export interface ITokenRepository {
-  CreateTokens(data: any, privateKey: string): CreateTokens;
+  CreateTokens(data: string, privateKey: string): CreateTokens;
   FindTokensByUserId(id: string): Promise<Token | null>;
   UpdateKeys(userId: string, refreshToken: string): Promise<CreateKeys>;
   RefreshToken(id: string, data: any, refreshTokenUsed: string): Promise<CreateTokens>;
@@ -92,12 +92,16 @@ export class TokenRepository implements ITokenRepository {
     }
     await this._db.$transaction(execute);
   }
-  CreateTokens(data: any, privateKey: string): CreateTokens {
-    const accessToken = jwt.sign(data, privateKey, {
+  CreateTokens(data: string, privateKey: string): CreateTokens {
+    const accessToken = jwt.sign({
+      sub: data
+    }, privateKey, {
       algorithm: 'RS256',
       expiresIn: '3 days',
     });
-    const refreshToken = jwt.sign(data, privateKey, {
+    const refreshToken = jwt.sign({
+      sub: data
+    }, privateKey, {
       algorithm: 'RS256',
       expiresIn: '2 days',
     });

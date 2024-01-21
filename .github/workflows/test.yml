@@ -1,0 +1,15 @@
+name: Test Phase
+on:
+  push:
+  pull_request: 
+    branches: 
+      - 'release*'
+    types: 
+      - opened 
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test Phase
+        uses: actions/checkout@v4
+      - run: echo  "123"

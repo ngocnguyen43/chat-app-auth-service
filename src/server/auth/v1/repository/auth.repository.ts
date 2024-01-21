@@ -27,6 +27,10 @@ export interface IAuthRepository {
   UpdatePasskeyCounter(id: string, userId: string, raw: string, counter: number): Promise<void>;
   FindPasswordByUserId(id: string): Promise<string>;
   TestCnt(): Promise<void>
+  AddOauth2(id: string, provider: string): Promise<void>
+  CheckLoginBefore(id: string, provider: string): Promise<{ provider: string, isLoginBefore: boolean }>
+  UpdateStatusLogin(id: string, provider: string): Promise<void>
+  DeleteUser(id: string): Promise<void>
 }
 @injectable()
 export class AuthRepository implements IAuthRepository {
@@ -34,6 +38,61 @@ export class AuthRepository implements IAuthRepository {
     @inject(TYPES.Prisma)
     private readonly _db: PrismaClient
   ) { }
+  async DeleteUser(id: string): Promise<void> {
+    const execute: string | any[] = [];
+    execute.push(
+      this._db.user.delete({
+        where: {
+          id
+        }
+      }),
+    );
+    await this._db.$transaction(execute);
+
+  }
+  async UpdateStatusLogin(id: string, provider: string): Promise<void> {
+    const otps = await this._db.authnOptions.findFirst({
+      where: {
+        userId: id,
+        key: {
+          path: '$.provider',
+          equals: provider
+        }
+      }
+    })
+    const json = {
+      // ...(otps.key as Prisma.JsonObject),
+      provider: provider,
+      isLoginBefore: true
+    };
+    console.log(otps);
+
+    const execute: string | any[] = [];
+    execute.push(
+      this._db.authnOptions.update({
+        where: {
+          id: otps.id
+        },
+        data: {
+          key: json
+        }
+      }),
+    );
+    await this._db.$transaction(execute);
+
+  }
+  async CheckLoginBefore(id: string, provider: string): Promise<any> {
+    const otps = await this._db.authnOptions.findFirst({
+      where: {
+        userId: id,
+        key: {
+          path: '$.provider',
+          equals: provider
+        }
+      }
+    })
+    return otps.key ?? null
+  }
   async TestCnt(): Promise<void> {
     await this._db.user.count()
   }
@@ -78,7 +137,6 @@ export class AuthRepository implements IAuthRepository {
         option: 'passkey',
       },
     });
-    console.log('check data:::', data);
     const json = {
       ...(data['key'] as []),
       devices: [...(data['key']['devices'] as []), device],
@@ -226,6 +284,23 @@ export class AuthRepository implements IAuthRepository {
     execute.push(
       this._db.user.create({
         data: dto
+      }),
+    );
+    await this._db.$transaction(execute);
+  }
+  async AddOauth2(userId: string, provider: string) {
+    const execute: string | any[] = [];
+    const json = {
+      provider,
+      isLoginBefore: false
+    } as Prisma.JsonObject;
+    execute.push(
+      this._db.authnOptions.create({
+        data: {
+          option: "oauth",
+          userId: userId,
+          key: json,
+        },
       }),
     );
     await this._db.$transaction(execute);

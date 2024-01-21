@@ -20,3 +20,8 @@ export class WrongPassword extends BaseError {
     super(StatusCode.UNAUTHORIZED, 'wrong password');
   }
 }
+export class WrongCredentials extends BaseError {
+  constructor() {
+    super(StatusCode.EXPECTATION_FAILED, "wrong credentials")
+  }
+}
