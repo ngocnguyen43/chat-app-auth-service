@@ -23,44 +23,7 @@ import {
 import base64url from 'base64url';
 import { ITokenRepository } from '../repository/token.repository';
 import { decode, decrypt, splitPartsKey } from '../../../utils';
-// google 
-// {
-//   "sub": string,
-//   "name": string,
-//   "given_name": string,
-//   "family_name": string,
-//   "picture": string,
-//   "email": string,
-//   "email_verified": boolean,
-//   "locale": string
-// }
-
-//github
-
-// {
-//   id: '136367099',
-//     nodeId: 'U_kgDOCCDL-w',
-//       displayName: 'Huỳnh Đăng Khoa',
-//         username: 'ngocnguyenm',
-//           profileUrl: 'https://github.com/ngocnguyenm',
-//             emails: [{ value: 'khoa_2151030161@dau.edu.vn' }],
-//               photos: [
-//                 { value: 'https://avatars.githubusercontent.com/u/136367099?v=4' }
-//               ],
-//                 provider: 'github',
-// }
-//facebook
-// {
-//   id: '1271712550216434',
-//   username: undefined,
-//   displayName: 'Minh Ngoc',
-//   name: {
-//     familyName: undefined,
-//     givenName: undefined,
-//     middleName: undefined
-//   },
-//   provider: 'facebook',
-// }
+import { config } from '../../../config';
 export interface IAuhtService {
   PasswordLogin(dto: IPasswordLoginDto): Promise<any>;
   Registration(dto: RegisterDto): Promise<any>;
@@ -77,6 +40,8 @@ export interface IAuhtService {
   UpdateStatusLogin(id: string, provider: string): Promise<void>
   DeleteUser(id: string): Promise<void>
   HandleSetupCredential(ssid: string, provider: string, email: string | null): Promise<any>
+  FindPasskeys(email: string): Promise<any>
+  DeletePasskeys(base64string: string, userId: string): Promise<void>
 }
 interface IMessageResponse {
   code: number;
@@ -92,6 +57,26 @@ export class AuthService implements IAuhtService {
     @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
   ) { }
+  async DeletePasskeys(base64string: string, userId: string): Promise<void> {
+    await this._authRepo.DeletePasskeys(base64string, userId)
+  }
+  async FindPasskeys(email: string): Promise<any> {
+    const res = (await RabbitMQClient.clientProduce('user-queue', {
+      type: 'get-user-by-email',
+      payload: { email: email },
+    })) as IMessageResponse;
+    if (res.code !== 1200) {
+      throw new InternalError()
+    }
+    const userId = res.payload['userId'];
+    const passkeys = await this._authRepo.FindPasskeys(userId)
+    const credentialIDs = passkeys.devices.map(i => i.credentialID)
+    const base64s = credentialIDs.map(i => {
+      const binaryString = String.fromCharCode(...i)
+      return { id: btoa(binaryString) };
+    })
+    return base64s
+  }
   async HandleSetupCredential(ssid: string, provider: string, email: string | null): Promise<any> {
     const splitSsid = splitPartsKey(ssid)
 
@@ -267,15 +252,6 @@ export class AuthService implements IAuhtService {
       if (res.code !== 1200) {
         await this.HandleSigninGoogle({ email: user.email, userName: (user.given_name) as string + " " + (user.family_name as string), fullName: (user.given_name) as string + " " + (user.family_name as string), picture: user.picture })
       }
-      // const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "google")
-      // try {
-      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
-      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: user.picture, provider: "google", accessToken, refreshToken };
-      // } catch (error) {
-      //   console.log(error)
-      // }
     }
     else if (user.provider === "facebook") {
       const res = (await RabbitMQClient.clientProduce('user-queue', {
@@ -285,15 +261,6 @@ export class AuthService implements IAuhtService {
       if (res.code !== 1200) {
         await this.HandleSigninFacebook({ id: user.id, displayName: user.displayName, picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png" })
       }
-      // const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "facebook")
-      // try {
-      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
-      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png", provider: "github", accessToken, refreshToken };
-      // } catch (error) {
-      //   console.log(error)
-      // }
     } else if (user.provider === "github") {
       const res = (await RabbitMQClient.clientProduce('user-queue', {
         type: 'get-user-by-provider',
@@ -302,15 +269,6 @@ export class AuthService implements IAuhtService {
       if (res.code !== 1200) {
         await this.HandleSigninGithub({ id: user.id, displayName: user.displayName, picture: user.photos[0].value })
       }
-      // const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "github")
-      // try {
-      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
-      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: user.photos[0].value, provider: "github", accessToken, refreshToken };
-      // } catch (error) {
-      //   console.log(error)
-      // }
     }
 
   }
@@ -459,7 +417,7 @@ export class AuthService implements IAuhtService {
     if (!target) {
       throw new InternalError();
     }
-    const res = (await RabbitMQClient.clientProduce(target, {
+    const res = (await RabbitMQClient.clientProduce("user-queue", {
       type: 'get-user-by-email',
       payload: {
         email: email,
@@ -499,9 +457,11 @@ export class AuthService implements IAuhtService {
       if (!target) {
         throw new InternalError();
       }
-      const res = (await RabbitMQClient.clientProduce(target, {
+      const res = (await RabbitMQClient.clientProduce("user-queue", {
         type: 'get-user-by-email',
-        payload: credential['user']['email'],
+        payload: {
+          email: credential['user']['email']
+        },
       })) as IMessageResponse;
       if (res.code !== 1200) {
         throw new InternalError();
@@ -512,11 +472,13 @@ export class AuthService implements IAuhtService {
       const user = await this._authRepo.GetUserById(userId);
       const expectedChallenge = user.currentChallenge;
       let verification: VerifiedRegistrationResponse;
+      console.log(config);
+
       const options = {
         response: data,
         expectedChallenge: `${expectedChallenge}`,
-        expectedOrigin: ['http://localhost:5173', 'https://localhost:5173'],
-        expectedRPID: 'localhost',
+        expectedOrigin: ['https://' + config['ORIGIN'], 'https://www.' + config['ORIGIN'], config['ORIGIN']],
+        expectedRPID: config['COOKIES_DOMAIN'],
         requireUserVerification: true,
       };
       verification = await verifyRegistrationResponse(options);
@@ -599,7 +561,7 @@ export class AuthService implements IAuhtService {
     if (!target) {
       throw new InternalError();
     }
-    const res = (await RabbitMQClient.clientProduce(target, {
+    const res = (await RabbitMQClient.clientProduce("user-queue", {
       type: 'get-user-by-email',
       payload: {
         email: email,
@@ -630,8 +592,8 @@ export class AuthService implements IAuhtService {
       const options: VerifyAuthenticationResponseOpts = {
         response: data,
         expectedChallenge: `${expectedChallenge}`,
-        expectedOrigin: ['http://localhost:5173', 'https://localhost:5173'],
-        expectedRPID: 'localhost',
+        expectedOrigin: ['https://' + config['ORIGIN'], 'https://www.' + config['ORIGIN'], config['ORIGIN']],
+        expectedRPID: config['COOKIES_DOMAIN'],
         authenticator: {
           ...dbAuthenticator,
           credentialPublicKey: Buffer.from(dbAuthenticator.credentialPublicKey), // Re-convert to Buffer from JSON
@@ -644,13 +606,14 @@ export class AuthService implements IAuhtService {
       throw new InternalError();
     }
     const { verified, authenticationInfo } = verification;
-    // console.log('check verify:::::', { verified, authenticationInfo });
-    // const passkeys = (await AuthOptionsRepository.FindPasskeys(user.id)) as [];
-    // console.log(Buffer.from(passkeys.at(1)['credentialID']).equals(bodyCredIDBuffer));
-    // console.log(bodyCredIDBuffer);
     if (verified) {
       await this._authRepo.UpdatePasskeyCounter(authn.id, user.id, data['rawId'], authenticationInfo.newCounter);
+      const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+      const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(userId, privateKey);
+      await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+      return { ok: 'OK', res: res['payload'], accessToken, refreshToken };
+    } else {
+      throw new WrongCredentials()
     }
-    return { ok: true };
   }
 }

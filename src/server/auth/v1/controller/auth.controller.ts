@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { inject } from 'inversify';
-import { controller, httpGet, httpPost, request, requestBody, response } from 'inversify-express-utils';
+import { controller, httpDelete, httpGet, httpPost, queryParam, request, requestBody, response } from 'inversify-express-utils';
 
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuhtService } from '../service/auth.service';
@@ -34,7 +34,6 @@ const FB_AVATAR = "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622
 
 @controller('/api/v1/auth')
 export class AuthController {
-  private rabbitMq = RabbitMQClient;
   constructor(@inject(TYPES.AuthService) private readonly _service: IAuhtService) { }
   @httpPost('/register', ...Middlewares.postRegisterCheck, RequestValidator)
   async Register(@request() req: Request, @requestBody() dto: RegisterDto, @response() res: Response) {
@@ -81,7 +80,14 @@ export class AuthController {
   @httpPost('/webauth-login-verification')
   async WebAuthnLoginVerification(@requestBody() dto: IWebAuthnLoginVerification, @response() res: Response) {
     console.log(dto.email);
-    return res.json(await this._service.WebAuthnLoginVerification(dto.email, dto.data));
+    const result = await this._service.WebAuthnLoginVerification(dto.email, dto.data);
+    return res.cookie('rft', result['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 2 * 60 * 60 * 1000 }).json({
+      id: result['res']['userId'],
+      email: result['res']['email'],
+      full_name: result['res']['fullName'],
+      user_name: result['res']['userName'],
+      access_token: result['accessToken'],
+    });
   }
   @httpGet('/test')
   async Test(@response() res: Response) {
@@ -269,6 +275,17 @@ export class AuthController {
     console.log(body);
 
     await this._service.UpdateStatusLogin(id, provider)
+  }
+  @httpGet("/passkeys")
+  async getAllPasskeys(@queryParam("email") email: string, @response() res: Response) {
+    console.log(email);
+    const passkeys = await this._service.FindPasskeys(email)
+
+    return res.json(passkeys)
+  }
+  @httpDelete("/passkey")
+  async DeletePasskey(@queryParam("i") i: string, @queryParam("u") u: string, @response() res: Response) {
+    await this._service.DeletePasskeys(i, u)
   }
   // @httpGet("/oauth2")
   // async GetData(@request() req: Request, @response() res: Response) {

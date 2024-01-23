@@ -1,4 +1,4 @@
-import { id, inject, injectable } from 'inversify';
+import { inject, injectable } from 'inversify';
 
 import { Prisma, PrismaClient } from '@prisma/client';
 
@@ -7,10 +7,17 @@ import { AuthCreateDto, AuthnPasswordDto, IAddGoogleDto, OAuthType } from '@v1';
 import { Options, decode, encode } from '../../../utils';
 import { InternalError, NotFound } from '../../../libs/base-exception';
 import { AuthnOptions, User } from '../../../config';
-import crypto from 'crypto';
-import jwt from 'jsonwebtoken';
 import base64url from 'base64url';
 
+type PasskeysValuesType = {
+  devices: {
+    counter: number, transports: string[], credentialID: number[], credentialPublicKey: number[]
+  }[],
+  webauthn: boolean
+}
+function arraysEqual(arr1: number[], arr2: number[]) {
+  return JSON.stringify(arr1) === JSON.stringify(arr2);
+}
 export interface IAuthRepository {
   AddPassword(dto: AuthnPasswordDto): Promise<void>;
   CreateOne(dto: AuthCreateDto): Promise<void>;
@@ -23,7 +30,7 @@ export interface IAuthRepository {
   GetUserById(userId: string): Promise<User>;
   CreateDevice(userId: string, device: any): Promise<void>;
   AddDevice(id: string, userId: string, device: any): Promise<void>;
-  FindPasskeys(id: string): Promise<Prisma.JsonValue>;
+  FindPasskeys(id: string): Promise<PasskeysValuesType | null>;
   UpdatePasskeyCounter(id: string, userId: string, raw: string, counter: number): Promise<void>;
   FindPasswordByUserId(id: string): Promise<string>;
   TestCnt(): Promise<void>
@@ -31,6 +38,7 @@ export interface IAuthRepository {
   CheckLoginBefore(id: string, provider: string): Promise<{ provider: string, isLoginBefore: boolean }>
   UpdateStatusLogin(id: string, provider: string): Promise<void>
   DeleteUser(id: string): Promise<void>
+  DeletePasskeys(base64id: string, userId: string): Promise<void>
 }
 @injectable()
 export class AuthRepository implements IAuthRepository {
@@ -38,6 +46,43 @@ export class AuthRepository implements IAuthRepository {
     @inject(TYPES.Prisma)
     private readonly _db: PrismaClient
   ) { }
+  async DeletePasskeys(base64id: string, userId: string): Promise<void> {
+    const passkeys = await this._db.authnOptions.findFirst({
+      where: {
+        userId,
+        option: 'passkey',
+      },
+    });
+    const key = passkeys.key as PasskeysValuesType
+    if (key.devices.length > 0) {
+      const binaryString = atob(base64id)
+      const arrayChars = Array.from(binaryString, c => c.charCodeAt(0))
+      const after = key.devices.filter(i => !arraysEqual(arrayChars, i.credentialID))
+      console.log(after);
+      if (after.length > 0) {
+        const execute: string | any[] = [];
+        const json = {
+          ...(passkeys.key as []),
+          devices: [...after],
+          webauthn: true,
+        };
+        execute.push(
+          this._db.authnOptions.update({
+            where: {
+              id: passkeys.id
+            },
+            data: {
+              key: json,
+            },
+          }),
+        );
+        if (execute.length > 0) {
+          await this._db.$transaction(execute);
+        }
+      }
+
+    }
+  }
   async DeleteUser(id: string): Promise<void> {
     const execute: string | any[] = [];
     execute.push(
@@ -328,7 +373,7 @@ export class AuthRepository implements IAuthRepository {
         option: 'passkey',
       },
     });
-    return passkeys.key ?? null;
+    return passkeys.key as PasskeysValuesType ?? null;
   }
   async AddChallenge(userId: string, challenge: string): Promise<any> {
     const execute: string | any[] = [];
