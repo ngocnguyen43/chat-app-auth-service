@@ -11,7 +11,7 @@ import base64url from 'base64url';
 
 type PasskeysValuesType = {
   devices: {
-    counter: number, transports: string[], credentialID: number[], credentialPublicKey: number[]
+    counter: number, transports: string[], credentialID: number[], credentialPublicKey: number[], createdAt: string
   }[],
   webauthn: boolean
 }
@@ -53,13 +53,14 @@ export class AuthRepository implements IAuthRepository {
         option: 'passkey',
       },
     });
+
     const key = passkeys.key as PasskeysValuesType
     if (key.devices.length > 0) {
       const binaryString = atob(base64id)
       const arrayChars = Array.from(binaryString, c => c.charCodeAt(0))
       const after = key.devices.filter(i => !arraysEqual(arrayChars, i.credentialID))
       console.log(after);
-      if (after.length > 0) {
+      if (after.length >= 0) {
         const execute: string | any[] = [];
         const json = {
           ...(passkeys.key as []),
@@ -160,6 +161,7 @@ export class AuthRepository implements IAuthRepository {
       devices: [device],
       webauthn: true,
     };
+
     execute.push(
       this._db.authnOptions.create({
         data: {

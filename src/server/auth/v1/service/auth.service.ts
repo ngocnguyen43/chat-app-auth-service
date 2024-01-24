@@ -70,10 +70,15 @@ export class AuthService implements IAuhtService {
     }
     const userId = res.payload['userId'];
     const passkeys = await this._authRepo.FindPasskeys(userId)
-    const credentialIDs = passkeys.devices.map(i => i.credentialID)
+    const credentialIDs = passkeys.devices.map(i => {
+      return {
+        credential: i.credentialID,
+        createdAt: i.createdAt
+      }
+    })
     const base64s = credentialIDs.map(i => {
-      const binaryString = String.fromCharCode(...i)
-      return { id: btoa(binaryString) };
+      const binaryString = String.fromCharCode(...i.credential)
+      return { id: btoa(binaryString), createdAt: i.createdAt };
     })
     return base64s
   }
@@ -472,7 +477,6 @@ export class AuthService implements IAuhtService {
       const user = await this._authRepo.GetUserById(userId);
       const expectedChallenge = user.currentChallenge;
       let verification: VerifiedRegistrationResponse;
-      console.log(config);
 
       const options = {
         response: data,
@@ -495,6 +499,7 @@ export class AuthService implements IAuhtService {
             credentialID: Array.from(credentialID),
             counter,
             transports: data.response.transports,
+            createdAt: Date.now().toString()
           };
           await this._authRepo.CreateDevice(userId, newDevice);
           console.log(newDevice);
@@ -505,13 +510,14 @@ export class AuthService implements IAuhtService {
               credentialID: Array.from(credentialID),
               counter,
               transports: data.response.transports,
+              createdAt: Date.now().toString()
             };
             await this._authRepo.AddDevice(auth.id, userId, newDevice);
             console.log(newDevice);
           }
         }
+        return { id: btoa(String.fromCharCode(...Array.from(credentialID))) };
       }
-      return { ok: true };
     } catch (error) {
       console.log(error);
       return { ok: 'not ok' };
