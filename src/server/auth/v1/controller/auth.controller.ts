@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { inject } from 'inversify';
-import { controller, httpDelete, httpGet, httpPost, queryParam, request, requestBody, response } from 'inversify-express-utils';
+import { controller, httpDelete, httpGet, httpPatch, httpPost, httpPut, queryParam, request, requestBody, response } from 'inversify-express-utils';
 
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuhtService } from '../service/auth.service';
@@ -286,6 +286,11 @@ export class AuthController {
   @httpDelete("/passkey")
   async DeletePasskey(@queryParam("i") i: string, @queryParam("u") u: string, @response() res: Response) {
     await this._service.DeletePasskeys(i, u)
+  }
+  @httpPatch("/newpassword")
+  async UPdatePassword(@requestBody() body: { email: string, oldPassword: string, newPassword: string }) {
+    const { email, oldPassword, newPassword } = body
+    await this._service.ChangePassword(email, oldPassword, newPassword)
   }
   // @httpGet("/oauth2")
   // async GetData(@request() req: Request, @response() res: Response) {

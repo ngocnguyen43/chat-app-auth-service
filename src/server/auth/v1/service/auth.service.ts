@@ -42,6 +42,7 @@ export interface IAuhtService {
   HandleSetupCredential(ssid: string, provider: string, email: string | null): Promise<any>
   FindPasskeys(email: string): Promise<any>
   DeletePasskeys(base64string: string, userId: string): Promise<void>
+  ChangePassword(email: string, oldPssword: string, newPassword: string): Promise<void>
 }
 interface IMessageResponse {
   code: number;
@@ -57,6 +58,24 @@ export class AuthService implements IAuhtService {
     @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
   ) { }
+  async ChangePassword(email: string, oldPssword: string, newPassword: string): Promise<void> {
+    const res = (await RabbitMQClient.clientProduce('user-queue', {
+      type: 'get-user-by-email',
+      payload: { email },
+    })) as IMessageResponse
+    if (res.code !== 1200) {
+      throw new WrongCredentials()
+    }
+    const decodedPassword = await this._authRepo.FindPasswordByUserId(res.payload['userId']);
+    if (decodedPassword) {
+      const isOldPasswordValid = await decode(oldPssword, decodedPassword)
+      if (!isOldPasswordValid) {
+        throw new WrongCredentials();
+      }
+      await this._authRepo.UpdatePassword(newPassword, res.payload['userId'])
+    }
+
+  }
   async DeletePasskeys(base64string: string, userId: string): Promise<void> {
     await this._authRepo.DeletePasskeys(base64string, userId)
   }
@@ -339,7 +358,6 @@ export class AuthService implements IAuhtService {
       type: 'get-user-by-email',
       payload: { email: dto.email },
     })) as IMessageResponse;
-    console.log(res.code)
     if (res.code !== 1200) {
       throw new NotFound();
     }

@@ -39,6 +39,7 @@ export interface IAuthRepository {
   UpdateStatusLogin(id: string, provider: string): Promise<void>
   DeleteUser(id: string): Promise<void>
   DeletePasskeys(base64id: string, userId: string): Promise<void>
+  UpdatePassword(password: string, userId: string): Promise<void>
 }
 @injectable()
 export class AuthRepository implements IAuthRepository {
@@ -46,6 +47,35 @@ export class AuthRepository implements IAuthRepository {
     @inject(TYPES.Prisma)
     private readonly _db: PrismaClient
   ) { }
+  async FindExistPassword(userId: string): Promise<any> {
+    const exist = await this._db.authnOptions.findFirstOrThrow({
+      where: {
+        userId,
+        option: "password"
+      }
+    })
+    return exist ?? null
+  }
+  async UpdatePassword(password: string, id: string): Promise<void> {
+    const execute: string | any[] = [];
+    const existPassword = await this.FindExistPassword(id)
+    if (existPassword) {
+      const json = {
+        value: await encode(password),
+      } as Prisma.JsonObject;
+      execute.push(
+        this._db.authnOptions.update({
+          where: {
+            id: existPassword["id"]
+          },
+          data: {
+            key: json,
+          },
+        }),
+      );
+      await this._db.$transaction(execute);
+    }
+  }
   async DeletePasskeys(base64id: string, userId: string): Promise<void> {
     const passkeys = await this._db.authnOptions.findFirst({
       where: {
