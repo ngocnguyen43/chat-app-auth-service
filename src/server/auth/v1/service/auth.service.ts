@@ -580,7 +580,7 @@ export class AuthService implements IAuhtService {
     const authn = await this._authRepo.FindOneByUserId(res.payload['userId'], 'passkey');
     const options: GenerateRegistrationOptionsOpts = {
       rpName: 'Chat App',
-      rpID: 'localhost',
+      rpID: config["COOKIES_DOMAIN"],
       userID: email,
       userName: res.payload['fullName'],
       timeout: 60000,
