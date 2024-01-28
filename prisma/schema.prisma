@@ -39,7 +39,6 @@ model AuthnOptions {
   option Options
   key    Json
 
-  @@unique([userId, option])
   @@map("authn_options")
 }
 

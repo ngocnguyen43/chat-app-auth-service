@@ -96,10 +96,12 @@ export class AuthRepository implements IAuthRepository {
       if (!exist) {
         return null
       }
-      const key = exist.key as { secret: string, enable: boolean }
-      console.log(key);
-
+      const key = exist ? exist.key as { secret: string, enable: boolean } : null
+      if (!key) {
+        return null
+      }
       return exist.id
+
     } catch (error) {
       console.log(error);
       return null
