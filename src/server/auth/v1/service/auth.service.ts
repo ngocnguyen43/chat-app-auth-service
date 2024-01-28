@@ -559,7 +559,8 @@ export class AuthService implements IAuhtService {
         throw new InternalError();
       }
     } catch (error) {
-      logger.error(error);
+      // logger.error(error);
+      console.log(error);
       return { opts }
     }
   }
