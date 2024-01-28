@@ -391,13 +391,13 @@ export class AuthRepository implements IAuthRepository {
   async LoginOptions(id: string): Promise<any> {
     const options = await this._db.authnOptions.findFirst({
       where: {
-        userId: id,
-        NOT: {
-          option: 'password',
-        },
+        AND: {
+          userId: id,
+          option: 'passkey',
+        }
       },
     });
-    return options.key as PasskeysValuesType || null
+    return options ? options.key as PasskeysValuesType : null
   }
   async PasswordLogin(dto: { id: string; password: string }): Promise<any> {
     try {

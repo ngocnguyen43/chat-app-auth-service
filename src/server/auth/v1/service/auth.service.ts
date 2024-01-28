@@ -549,7 +549,6 @@ export class AuthService implements IAuhtService {
           };
         }
         const optionsKey = await this._authRepo.LoginOptions(res.payload["userId"])
-        console.log(optionsKey);
         if (!optionsKey || optionsKey.devices.length === 0) {
           return {
             opts
@@ -560,8 +559,7 @@ export class AuthService implements IAuhtService {
         throw new InternalError();
       }
     } catch (error) {
-      // logger.error(error);
-      console.log(error);
+      logger.error(error);
       return { opts }
     }
   }
