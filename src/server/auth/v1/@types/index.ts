@@ -86,3 +86,10 @@ type StrictUnionHelper<T, TAll> =
   ? T & Partial<Record<Exclude<UnionKeys<TAll>, keyof T>, never>> : never;
 
 export type StrictUnion<T> = StrictUnionHelper<T, T>
+
+export type PasskeysValuesType = {
+  devices: {
+    counter: number, transports: string[], credentialID: number[], credentialPublicKey: number[], createdAt: string
+  }[],
+  webauthn: boolean
+}

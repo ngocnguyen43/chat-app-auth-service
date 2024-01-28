@@ -35,6 +35,32 @@ const FB_AVATAR = "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622
 @controller('/api/v1/auth')
 export class AuthController {
   constructor(@inject(TYPES.AuthService) private readonly _service: IAuhtService) { }
+  @httpPatch("/validate-otp")
+  async Validate2FA(@requestBody() body: { email: string, token: string }) {
+    const { email, token } = body
+    await this._service.Validate2FA(email, token)
+  }
+  @httpDelete("/mf-otps")
+  async Delete2FA(@queryParam("email") email: string) {
+    await this._service.Delete2FA(email)
+  }
+  @httpGet("/mf-otps")
+  async GetMFOTPS(@queryParam("email") email: string, @response() res: Response) {
+    return res.json(await this._service.Find2Fa(email))
+  }
+  @httpPost("/verify-otp")
+  async VerifyOTP(@requestBody() body: { email: string, token: string }) {
+    const { email, token } = body
+    await this._service.Enable2FA(email, token)
+  }
+  @httpGet("/generate-mfa")
+  async GenerateMFA(
+    @queryParam("email") email: string, @response() res: Response
+  ) {
+    const url = await this._service.Create2FA(email)
+    return res.send(`<img src="${url}"  width="200" alt="" srcSet="" />
+    `)
+  }
   @httpPost('/register', ...Middlewares.postRegisterCheck, RequestValidator)
   async Register(@request() req: Request, @requestBody() dto: RegisterDto, @response() res: Response) {
     dto.userId = randomUUID();
@@ -50,7 +76,9 @@ export class AuthController {
   }
   @httpPost('/login-options')
   async LoginOptions(@requestBody() dto: ILoginOptionsDto, @response() res: Response) {
-    return res.json(await this._service.LoginOptions(dto.email));
+    const mf = await this._service.Find2Fa(dto.email)
+    const otps = await this._service.LoginOptions(dto.email)
+    return res.json({ ...otps, ...mf });
   }
   @httpPost('/login-password')
   async LoginPassword(@requestBody() dto: IPasswordLoginDto, @request() req: Request, @response() res: Response) {
@@ -288,7 +316,7 @@ export class AuthController {
     await this._service.DeletePasskeys(i, u)
   }
   @httpPatch("/newpassword")
-  async UPdatePassword(@requestBody() body: { email: string, oldPassword: string, newPassword: string }) {
+  async UpdatePassword(@requestBody() body: { email: string, oldPassword: string, newPassword: string }) {
     const { email, oldPassword, newPassword } = body
     await this._service.ChangePassword(email, oldPassword, newPassword)
   }

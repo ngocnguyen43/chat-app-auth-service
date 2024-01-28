@@ -2,6 +2,8 @@ import { connect, Connection } from 'amqplib';
 import bcrypt from 'bcrypt';
 import { config } from '../config';
 import crypto from "crypto"
+import { promisify } from 'util';
+import * as base32 from 'hi-base32';
 
 export async function sleep(ms: number) {
   return new Promise<void>((resolve) => {
@@ -121,8 +123,17 @@ export function splitPartsKey(text: string) {
   ];
 }
 
+export function arraysEqual(arr1: number[], arr2: number[]) {
+  return JSON.stringify(arr1) === JSON.stringify(arr2);
+}
 export function extractValue(str: string, key: string) {
   const regex = new RegExp(`${key}=([^&]+)`);
   const match = regex.exec(str);
   return match ? match[1] : null;
 }
+export const generateRandomBase32 = (): string => {
+  const buffer = crypto.randomBytes(15);
+  const str = base32.encode(buffer).replace(/=/g, "").substring(0, 24);
+  return str;
+};
+export const randomBytesAsync = promisify(generateRandomBase32);

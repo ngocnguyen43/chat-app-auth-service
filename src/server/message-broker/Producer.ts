@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import EventEmitter from 'events';
 
 export class Producer {
-  constructor(private chanel: Channel, private replyQueue?: string, private eventEmitter?: EventEmitter) {}
+  constructor(private chanel: Channel, private replyQueue?: string, private eventEmitter?: EventEmitter) { }
   async clientProduceMessages(target: string, message: any) {
     const uuid = randomUUID();
     console.log('correId::::::', uuid);
@@ -13,7 +13,12 @@ export class Producer {
       expiration: 10,
     });
     return new Promise((resolve, reject) => {
+      const timeoutDuration = 5000; // Set your desired timeout duration in milliseconds
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Timeout: No message found in event within the specified time.'));
+      }, timeoutDuration);
       this.eventEmitter.once(uuid, async (data) => {
+        clearTimeout(timeoutId);
         const reply = JSON.parse(data.content.toString());
         resolve(reply);
       });
