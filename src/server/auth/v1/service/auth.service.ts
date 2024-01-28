@@ -697,7 +697,7 @@ export class AuthService implements IAuhtService {
           : [],
         // userVerification: 'required',
         userVerification: 'preferred',
-        rpID: 'localhost',
+        rpID: config['COOKIES_DOMAIN'],
       };
       const loginOpts = generateAuthenticationOptions(options);
       const challenge = loginOpts.challenge;
