@@ -31,6 +31,7 @@ ARG DOPPLER_TOKEN
 
 ENV DOPPLER_TOKEN ${DOPPLER_TOKEN}
 ENV NODE_ENV production
+ENV TZ Asia/Ho_Chi_Minh
 # Copy only the necessary artifacts from the builder stage
 COPY --from=builder /usr/src/dist ./dist
 COPY --from=builder /usr/src/prisma ./prisma

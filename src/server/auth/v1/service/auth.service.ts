@@ -8,6 +8,8 @@ import { RegisterDto } from '../controller/auth.controller';
 import { IPasswordLoginDto } from '@v1';
 import { InternalError, NotFound, WrongCredentials, WrongPassword } from '../../../libs/base-exception';
 import { generateKeyPairSync, randomUUID } from 'crypto';
+import { toDataURL } from "qrcode"
+import * as OTPAuth from "otpauth";
 
 import {
   GenerateAuthenticationOptionsOpts,
@@ -22,45 +24,8 @@ import {
 } from '@simplewebauthn/server';
 import base64url from 'base64url';
 import { ITokenRepository } from '../repository/token.repository';
-import { decode, decrypt, splitPartsKey } from '../../../utils';
-// google 
-// {
-//   "sub": string,
-//   "name": string,
-//   "given_name": string,
-//   "family_name": string,
-//   "picture": string,
-//   "email": string,
-//   "email_verified": boolean,
-//   "locale": string
-// }
-
-//github
-
-// {
-//   id: '136367099',
-//     nodeId: 'U_kgDOCCDL-w',
-//       displayName: 'Huỳnh Đăng Khoa',
-//         username: 'ngocnguyenm',
-//           profileUrl: 'https://github.com/ngocnguyenm',
-//             emails: [{ value: 'khoa_2151030161@dau.edu.vn' }],
-//               photos: [
-//                 { value: 'https://avatars.githubusercontent.com/u/136367099?v=4' }
-//               ],
-//                 provider: 'github',
-// }
-//facebook
-// {
-//   id: '1271712550216434',
-//   username: undefined,
-//   displayName: 'Minh Ngoc',
-//   name: {
-//     familyName: undefined,
-//     givenName: undefined,
-//     middleName: undefined
-//   },
-//   provider: 'facebook',
-// }
+import { decode, decrypt, generateRandomBase32, randomBytesAsync, splitPartsKey } from '../../../utils';
+import { config } from '../../../config';
 export interface IAuhtService {
   PasswordLogin(dto: IPasswordLoginDto): Promise<any>;
   Registration(dto: RegisterDto): Promise<any>;
@@ -77,6 +42,14 @@ export interface IAuhtService {
   UpdateStatusLogin(id: string, provider: string): Promise<void>
   DeleteUser(id: string): Promise<void>
   HandleSetupCredential(ssid: string, provider: string, email: string | null): Promise<any>
+  FindPasskeys(email: string): Promise<any>
+  DeletePasskeys(base64string: string, userId: string): Promise<void>
+  ChangePassword(email: string, oldPssword: string, newPassword: string): Promise<void>
+  Create2FA(email: string): Promise<string>
+  Enable2FA(email: string, token: string): Promise<void>
+  Find2Fa(email: string): Promise<{ "2fa": boolean }>
+  Delete2FA(email: string): Promise<void>
+  Validate2FA(email: string, token: string): Promise<void>
 }
 interface IMessageResponse {
   code: number;
@@ -92,6 +65,165 @@ export class AuthService implements IAuhtService {
     @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
   ) { }
+  async Validate2FA(email: string, token: string): Promise<void> {
+    const res = (await RabbitMQClient.clientProduce('user-queue', {
+      type: 'get-user-by-email',
+      payload: { email },
+    })) as IMessageResponse
+    if (res.code !== 1200) {
+      throw new WrongCredentials()
+    }
+    const existCredential = await this._authRepo.FindOneFAWithSecret(res.payload["userId"])
+    const exist2FA = await this._authRepo.FindOneFA(res.payload["userId"])
+    if (!exist2FA || !existCredential) {
+      throw new WrongPassword()
+    }
+    const totp = new OTPAuth.TOTP({
+      issuer: config["ORIGIN"],
+      label: email,
+      algorithm: "SHA1",
+      digits: 6,
+      secret: existCredential.secret!,
+    });
+
+    const delta = totp.validate({ token, window: 2 });
+
+    if (delta === null) {
+      throw new WrongCredentials()
+    }
+    return
+  }
+  async Delete2FA(email: string): Promise<void> {
+    const res = (await RabbitMQClient.clientProduce('user-queue', {
+      type: 'get-user-by-email',
+      payload: { email },
+    })) as IMessageResponse
+    if (res.code !== 1200) {
+      throw new WrongCredentials()
+    }
+    const exist2fa = await this._authRepo.FindOneFA(res.payload["userId"])
+    if (!exist2fa) {
+      return
+    }
+    await this._authRepo.Delete2FA(exist2fa)
+  }
+  async Find2Fa(email: string): Promise<{ "2fa": boolean }> {
+    const res = (await RabbitMQClient.clientProduce('user-queue', {
+      type: 'get-user-by-email',
+      payload: { email },
+    })) as IMessageResponse
+    if (res.code !== 1200) {
+      return { "2fa": false }
+    }
+    const exist2fa = await this._authRepo.FindOneFAWithSecret(res.payload["userId"])
+    if (!exist2fa) {
+      return { "2fa": false }
+    }
+    return { "2fa": exist2fa.enable }
+  }
+  async Enable2FA(email: string, token: string): Promise<void> {
+    const res = (await RabbitMQClient.clientProduce('user-queue', {
+      type: 'get-user-by-email',
+      payload: { email },
+    })) as IMessageResponse
+    if (res.code !== 1200) {
+      throw new WrongCredentials()
+    }
+    const existCredential = await this._authRepo.FindOneFAWithSecret(res.payload["userId"])
+    const exist2FA = await this._authRepo.FindOneFA(res.payload["userId"])
+    if (!exist2FA || !existCredential) {
+      throw new WrongPassword()
+    }
+    const totp = new OTPAuth.TOTP({
+      issuer: config["ORIGIN"],
+      label: email,
+      algorithm: "SHA1",
+      digits: 6,
+      secret: existCredential.secret!,
+    });
+
+    const delta = totp.validate({ token, window: 2 });
+
+    if (delta === null) {
+      throw new WrongCredentials()
+    }
+    await this._authRepo.Update2FA(exist2FA, existCredential.secret, true)
+  }
+  async Create2FA(email: string): Promise<string> {
+    const res = (await RabbitMQClient.clientProduce('user-queue', {
+      type: 'get-user-by-email',
+      payload: { email },
+    })) as IMessageResponse
+    if (res.code !== 1200) {
+      throw new WrongCredentials()
+    }
+    const exist2FA = await this._authRepo.FindOneFA(res.payload["userId"])
+
+    const secret = generateRandomBase32()
+    const uuid = randomUUID()
+    if (exist2FA) {
+      await this._authRepo.Update2FA(exist2FA, secret, false)
+    } else {
+      await this._authRepo.Create2FA(uuid, res.payload["userId"], secret)
+    }
+    try {
+      const totp = new OTPAuth.TOTP({
+        issuer: config["ORIGIN"],
+        label: email,
+        algorithm: "SHA1",
+        digits: 6,
+        secret
+      });
+      return await toDataURL(totp.toString())
+    } catch (error) {
+      console.log(error);
+      return ""
+
+    }
+  }
+  async ChangePassword(email: string, oldPssword: string, newPassword: string): Promise<void> {
+    const res = (await RabbitMQClient.clientProduce('user-queue', {
+      type: 'get-user-by-email',
+      payload: { email },
+    })) as IMessageResponse
+    if (res.code !== 1200) {
+      throw new WrongCredentials()
+    }
+    const decodedPassword = await this._authRepo.FindPasswordByUserId(res.payload['userId']);
+    if (decodedPassword) {
+      const isOldPasswordValid = await decode(oldPssword, decodedPassword)
+      if (!isOldPasswordValid) {
+        throw new WrongCredentials();
+      }
+      await this._authRepo.UpdatePassword(newPassword, res.payload['userId'])
+    }
+
+  }
+  async DeletePasskeys(base64string: string, userId: string): Promise<void> {
+    await this._authRepo.DeletePasskeys(base64string, userId)
+  }
+  async FindPasskeys(email: string): Promise<any> {
+    const res = (await RabbitMQClient.clientProduce('user-queue', {
+      type: 'get-user-by-email',
+      payload: { email: email },
+    })) as IMessageResponse;
+    if (res.code !== 1200) {
+      throw new InternalError()
+    }
+    const userId = res.payload['userId'];
+    const passkeys = await this._authRepo.FindPasskeys(userId)
+    const credentialIDs = passkeys.devices.map(i => {
+      return {
+        credential: i.credentialID,
+        createdAt: i.createdAt
+      }
+    })
+    const base64s = credentialIDs.map(i => {
+      const binaryString = String.fromCharCode(...i.credential)
+      return { id: btoa(binaryString), createdAt: i.createdAt };
+    })
+    return base64s
+  }
   async HandleSetupCredential(ssid: string, provider: string, email: string | null): Promise<any> {
     const splitSsid = splitPartsKey(ssid)
 
@@ -267,15 +399,6 @@ export class AuthService implements IAuhtService {
       if (res.code !== 1200) {
         await this.HandleSigninGoogle({ email: user.email, userName: (user.given_name) as string + " " + (user.family_name as string), fullName: (user.given_name) as string + " " + (user.family_name as string), picture: user.picture })
       }
-      // const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "google")
-      // try {
-      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
-      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: user.picture, provider: "google", accessToken, refreshToken };
-      // } catch (error) {
-      //   console.log(error)
-      // }
     }
     else if (user.provider === "facebook") {
       const res = (await RabbitMQClient.clientProduce('user-queue', {
@@ -285,15 +408,6 @@ export class AuthService implements IAuhtService {
       if (res.code !== 1200) {
         await this.HandleSigninFacebook({ id: user.id, displayName: user.displayName, picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png" })
       }
-      // const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "facebook")
-      // try {
-      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
-      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png", provider: "github", accessToken, refreshToken };
-      // } catch (error) {
-      //   console.log(error)
-      // }
     } else if (user.provider === "github") {
       const res = (await RabbitMQClient.clientProduce('user-queue', {
         type: 'get-user-by-provider',
@@ -302,15 +416,6 @@ export class AuthService implements IAuhtService {
       if (res.code !== 1200) {
         await this.HandleSigninGithub({ id: user.id, displayName: user.displayName, picture: user.photos[0].value })
       }
-      // const userKey = await this._authRepo.CheckLoginBefore(res.payload["userId"], "github")
-      // try {
-      //   const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-      //   const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
-      //   await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-      //   return { isLoginBefore: userKey.isLoginBefore, ...res['payload'], id: res["payload"]["userId"], picture: user.photos[0].value, provider: "github", accessToken, refreshToken };
-      // } catch (error) {
-      //   console.log(error)
-      // }
     }
 
   }
@@ -376,7 +481,6 @@ export class AuthService implements IAuhtService {
       type: 'get-user-by-email',
       payload: { email: dto.email },
     })) as IMessageResponse;
-    console.log(res.code)
     if (res.code !== 1200) {
       throw new NotFound();
     }
@@ -429,29 +533,34 @@ export class AuthService implements IAuhtService {
     return { message: 'email already in used!' };
   }
   async LoginOptions(email: string) {
+    const opts = {
+      password: true,
+    }
     try {
       const target = await getService('user-service');
-      console.log(target)
       if (target) {
         const res = (await RabbitMQClient.clientProduce("user-queue", {
           type: 'get-user-by-email',
           payload: { email: email },
         })) as IMessageResponse;
-        console.log(res)
         if (res.code !== 1200) {
           return {
-            opts: {
-              password: true,
-            },
+            opts
           };
         }
-        return { opts: await this._authRepo.LoginOptions(res.payload['userId']) };
+        const optionsKey = await this._authRepo.LoginOptions(res.payload["userId"])
+        if (!optionsKey || optionsKey.devices.length === 0) {
+          return {
+            opts
+          }
+        }
+        return { opts: { ...opts, passkey: true } };
       } else {
         throw new InternalError();
       }
     } catch (error) {
       logger.error(error);
-      throw error;
+      return { opts }
     }
   }
   async WebAuthnRegistrationOptions(email: string) {
@@ -459,7 +568,7 @@ export class AuthService implements IAuhtService {
     if (!target) {
       throw new InternalError();
     }
-    const res = (await RabbitMQClient.clientProduce(target, {
+    const res = (await RabbitMQClient.clientProduce("user-queue", {
       type: 'get-user-by-email',
       payload: {
         email: email,
@@ -471,7 +580,7 @@ export class AuthService implements IAuhtService {
     const authn = await this._authRepo.FindOneByUserId(res.payload['userId'], 'passkey');
     const options: GenerateRegistrationOptionsOpts = {
       rpName: 'Chat App',
-      rpID: 'localhost',
+      rpID: config["COOKIES_DOMAIN"],
       userID: email,
       userName: res.payload['fullName'],
       timeout: 60000,
@@ -499,9 +608,11 @@ export class AuthService implements IAuhtService {
       if (!target) {
         throw new InternalError();
       }
-      const res = (await RabbitMQClient.clientProduce(target, {
+      const res = (await RabbitMQClient.clientProduce("user-queue", {
         type: 'get-user-by-email',
-        payload: credential['user']['email'],
+        payload: {
+          email: credential['user']['email']
+        },
       })) as IMessageResponse;
       if (res.code !== 1200) {
         throw new InternalError();
@@ -512,11 +623,12 @@ export class AuthService implements IAuhtService {
       const user = await this._authRepo.GetUserById(userId);
       const expectedChallenge = user.currentChallenge;
       let verification: VerifiedRegistrationResponse;
+
       const options = {
         response: data,
         expectedChallenge: `${expectedChallenge}`,
-        expectedOrigin: ['http://localhost:5173', 'https://localhost:5173'],
-        expectedRPID: 'localhost',
+        expectedOrigin: ['https://' + config['ORIGIN'], 'https://www.' + config['ORIGIN'], config['ORIGIN']],
+        expectedRPID: config['COOKIES_DOMAIN'],
         requireUserVerification: true,
       };
       verification = await verifyRegistrationResponse(options);
@@ -533,6 +645,7 @@ export class AuthService implements IAuhtService {
             credentialID: Array.from(credentialID),
             counter,
             transports: data.response.transports,
+            createdAt: Date.now().toString()
           };
           await this._authRepo.CreateDevice(userId, newDevice);
           console.log(newDevice);
@@ -543,13 +656,14 @@ export class AuthService implements IAuhtService {
               credentialID: Array.from(credentialID),
               counter,
               transports: data.response.transports,
+              createdAt: Date.now().toString()
             };
             await this._authRepo.AddDevice(auth.id, userId, newDevice);
             console.log(newDevice);
           }
         }
+        return { id: btoa(String.fromCharCode(...Array.from(credentialID))) };
       }
-      return { ok: true };
     } catch (error) {
       console.log(error);
       return { ok: 'not ok' };
@@ -583,7 +697,7 @@ export class AuthService implements IAuhtService {
           : [],
         // userVerification: 'required',
         userVerification: 'preferred',
-        rpID: 'localhost',
+        rpID: config['COOKIES_DOMAIN'],
       };
       const loginOpts = generateAuthenticationOptions(options);
       const challenge = loginOpts.challenge;
@@ -599,7 +713,7 @@ export class AuthService implements IAuhtService {
     if (!target) {
       throw new InternalError();
     }
-    const res = (await RabbitMQClient.clientProduce(target, {
+    const res = (await RabbitMQClient.clientProduce("user-queue", {
       type: 'get-user-by-email',
       payload: {
         email: email,
@@ -630,8 +744,8 @@ export class AuthService implements IAuhtService {
       const options: VerifyAuthenticationResponseOpts = {
         response: data,
         expectedChallenge: `${expectedChallenge}`,
-        expectedOrigin: ['http://localhost:5173', 'https://localhost:5173'],
-        expectedRPID: 'localhost',
+        expectedOrigin: ['https://' + config['ORIGIN'], 'https://www.' + config['ORIGIN'], config['ORIGIN']],
+        expectedRPID: config['COOKIES_DOMAIN'],
         authenticator: {
           ...dbAuthenticator,
           credentialPublicKey: Buffer.from(dbAuthenticator.credentialPublicKey), // Re-convert to Buffer from JSON
@@ -644,13 +758,14 @@ export class AuthService implements IAuhtService {
       throw new InternalError();
     }
     const { verified, authenticationInfo } = verification;
-    // console.log('check verify:::::', { verified, authenticationInfo });
-    // const passkeys = (await AuthOptionsRepository.FindPasskeys(user.id)) as [];
-    // console.log(Buffer.from(passkeys.at(1)['credentialID']).equals(bodyCredIDBuffer));
-    // console.log(bodyCredIDBuffer);
     if (verified) {
       await this._authRepo.UpdatePasskeyCounter(authn.id, user.id, data['rawId'], authenticationInfo.newCounter);
+      const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+      const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(userId, privateKey);
+      await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
+      return { ok: 'OK', res: res['payload'], accessToken, refreshToken };
+    } else {
+      throw new WrongCredentials()
     }
-    return { ok: true };
   }
 }

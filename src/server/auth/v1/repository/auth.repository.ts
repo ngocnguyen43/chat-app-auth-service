@@ -1,21 +1,20 @@
-import { id, inject, injectable } from 'inversify';
+import { inject, injectable } from 'inversify';
 
 import { Prisma, PrismaClient } from '@prisma/client';
 
-import { TYPES } from '../@types';
+import { PasskeysValuesType, TYPES } from '../@types';
 import { AuthCreateDto, AuthnPasswordDto, IAddGoogleDto, OAuthType } from '@v1';
-import { Options, decode, encode } from '../../../utils';
-import { InternalError, NotFound } from '../../../libs/base-exception';
+import { Options, arraysEqual, decode, encode } from '../../../utils';
+import { InternalError, NotFound, WrongPassword } from '../../../libs/base-exception';
 import { AuthnOptions, User } from '../../../config';
-import crypto from 'crypto';
-import jwt from 'jsonwebtoken';
 import base64url from 'base64url';
+
 
 export interface IAuthRepository {
   AddPassword(dto: AuthnPasswordDto): Promise<void>;
   CreateOne(dto: AuthCreateDto): Promise<void>;
   PasswordLogin(dto: { id: string; password: string }): Promise<any>;
-  LoginOptions(id: string): Promise<any>;
+  LoginOptions(id: string): Promise<PasskeysValuesType | null>;
   AddGoogle(dto: IAddGoogleDto): Promise<void>;
   FindOneWithKeyValue(userId: string, value: OAuthType, type: 'oauth' | 'otp'): Promise<AuthnOptions>;
   FindOneByUserId(userId: string, type: 'oauth' | 'passkey' | 'password' | 'otp'): Promise<AuthnOptions>;
@@ -23,7 +22,7 @@ export interface IAuthRepository {
   GetUserById(userId: string): Promise<User>;
   CreateDevice(userId: string, device: any): Promise<void>;
   AddDevice(id: string, userId: string, device: any): Promise<void>;
-  FindPasskeys(id: string): Promise<Prisma.JsonValue>;
+  FindPasskeys(id: string): Promise<PasskeysValuesType | null>;
   UpdatePasskeyCounter(id: string, userId: string, raw: string, counter: number): Promise<void>;
   FindPasswordByUserId(id: string): Promise<string>;
   TestCnt(): Promise<void>
@@ -31,6 +30,13 @@ export interface IAuthRepository {
   CheckLoginBefore(id: string, provider: string): Promise<{ provider: string, isLoginBefore: boolean }>
   UpdateStatusLogin(id: string, provider: string): Promise<void>
   DeleteUser(id: string): Promise<void>
+  DeletePasskeys(base64id: string, userId: string): Promise<void>
+  UpdatePassword(password: string, userId: string): Promise<void>
+  Create2FA(id: string, userId: string, secret: string): Promise<void>
+  Update2FA(id: string, secret: string, enable: boolean): Promise<void>
+  FindOneFA(userId: string): Promise<string | null>
+  FindOneFAWithSecret(id: string): Promise<{ secret: string, enable: boolean } | null>
+  Delete2FA(id: string): Promise<void>
 }
 @injectable()
 export class AuthRepository implements IAuthRepository {
@@ -38,6 +44,154 @@ export class AuthRepository implements IAuthRepository {
     @inject(TYPES.Prisma)
     private readonly _db: PrismaClient
   ) { }
+  async Delete2FA(id: string): Promise<void> {
+    const execute: string | any[] = [];
+    execute.push(this._db.authnOptions.delete({
+      where: {
+        id,
+      },
+
+    }))
+    await this._db.$transaction(execute)
+  }
+  async FindOneFAWithSecret(id: string): Promise<{ secret: string; enable: boolean; } | null> {
+    const exist = await this._db.authnOptions.findFirst({
+      where: {
+        AND: {
+          userId: id,
+          option: "mfa"
+        }
+      }
+    })
+    const key = exist ? exist.key as { secret: string, enable: boolean } : null
+    return key ?? null
+  }
+  async Update2FA(id: string, secret: string, enable: boolean): Promise<void> {
+    const execute: string | any[] = [];
+    const json = {
+      secret,
+      enable
+    }
+    execute.push(this._db.authnOptions.update({
+      where: {
+        id,
+      },
+      data: {
+        key: json
+      },
+
+    }))
+    await this._db.$transaction(execute)
+  }
+  async FindOneFA(userId: string): Promise<string | null> {
+    try {
+      const exist = await this._db.authnOptions.findFirst({
+        where: {
+          AND: {
+            userId,
+            option: "mfa"
+          }
+        }
+      })
+      if (!exist) {
+        return null
+      }
+      const key = exist ? exist.key as { secret: string, enable: boolean } : null
+      if (!key) {
+        return null
+      }
+      return exist.id
+
+    } catch (error) {
+      console.log(error);
+      return null
+    }
+  }
+  async Create2FA(id: string, userId: string, secret: string): Promise<void> {
+    const execute: string | any[] = [];
+    const json = {
+      secret,
+      enable: false
+    }
+    execute.push(this._db.authnOptions.create({
+      data: {
+        id,
+        userId,
+        option: "mfa",
+        key: json
+
+      },
+
+    }))
+    await this._db.$transaction(execute)
+  }
+  async FindExistPassword(userId: string): Promise<any> {
+    const exist = await this._db.authnOptions.findFirstOrThrow({
+      where: {
+        userId,
+        option: "password"
+      }
+    })
+    return exist ?? null
+  }
+  async UpdatePassword(password: string, id: string): Promise<void> {
+    const execute: string | any[] = [];
+    const existPassword = await this.FindExistPassword(id)
+    if (existPassword) {
+      const json = {
+        value: await encode(password),
+      } as Prisma.JsonObject;
+      execute.push(
+        this._db.authnOptions.update({
+          where: {
+            id: existPassword["id"]
+          },
+          data: {
+            key: json,
+          },
+        }),
+      );
+      await this._db.$transaction(execute);
+    }
+  }
+  async DeletePasskeys(base64id: string, userId: string): Promise<void> {
+    const passkeys = await this._db.authnOptions.findFirst({
+      where: {
+        userId,
+        option: 'passkey',
+      },
+    });
+
+    const key = passkeys.key as PasskeysValuesType
+    if (key.devices.length > 0) {
+      const binaryString = atob(base64id)
+      const arrayChars = Array.from(binaryString, c => c.charCodeAt(0))
+      const after = key.devices.filter(i => !arraysEqual(arrayChars, i.credentialID))
+      console.log(after);
+      if (after.length >= 0) {
+        const execute: string | any[] = [];
+        const json = {
+          ...(passkeys.key as []),
+          devices: [...after],
+          webauthn: true,
+        };
+        execute.push(
+          this._db.authnOptions.update({
+            where: {
+              id: passkeys.id
+            },
+            data: {
+              key: json,
+            },
+          }),
+        );
+        if (execute.length > 0) {
+          await this._db.$transaction(execute);
+        }
+      }
+
+    }
+  }
   async DeleteUser(id: string): Promise<void> {
     const execute: string | any[] = [];
     execute.push(
@@ -104,7 +258,7 @@ export class AuthRepository implements IAuthRepository {
       },
     });
     if (!auth) {
-      throw new NotFound();
+      throw new WrongPassword();
     }
     const { value } = auth.key as Prisma.JsonObject;
     return value as string;
@@ -115,6 +269,7 @@ export class AuthRepository implements IAuthRepository {
       devices: [device],
       webauthn: true,
     };
+
     execute.push(
       this._db.authnOptions.create({
         data: {
@@ -234,19 +389,19 @@ export class AuthRepository implements IAuthRepository {
     return oAuth ?? null;
   }
   async LoginOptions(id: string): Promise<any> {
-    const options = await this._db.authnOptions.findMany({
+    const options = await this._db.authnOptions.findFirst({
       where: {
-        userId: id,
-        NOT: {
-          option: 'password',
-        },
+        AND: {
+          userId: id,
+          option: 'passkey',
+        }
       },
     });
-    return Options(options);
+    return options ? options.key as PasskeysValuesType : null
   }
   async PasswordLogin(dto: { id: string; password: string }): Promise<any> {
     try {
-      const auth = await this._db.authnOptions.findFirst({
+      const auth = await this._db.authnOptions.findFirstOrThrow({
         where: {
           option: 'password',
           userId: dto.id,
@@ -328,7 +483,7 @@ export class AuthRepository implements IAuthRepository {
         option: 'passkey',
       },
     });
-    return passkeys.key ?? null;
+    return passkeys.key as PasskeysValuesType ?? null;
   }
   async AddChallenge(userId: string, challenge: string): Promise<any> {
     const execute: string | any[] = [];
