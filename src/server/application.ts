@@ -38,6 +38,7 @@ export class Application extends AbstractApplication {
         cors({
           credentials: true,
           origin: ['https://' + config['ORIGIN'], 'https://www.' + config['ORIGIN'], config['ORIGIN']],
+          maxAge: 86400
         }),
       );
       app.use(passport.initialize())
