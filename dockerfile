@@ -34,7 +34,7 @@ ENV NODE_ENV production
 ENV TZ Asia/Ho_Chi_Minh
 # Copy only the necessary artifacts from the builder stage
 COPY --from=builder /usr/src/dist ./dist
-# COPY --from=builder /usr/src/prisma ./prisma
+COPY --from=builder /usr/src/prisma ./prisma
 COPY --from=builder /usr/src/node_modules ./node_modules
 COPY --from=builder /usr/src/package.json ./package.json
 
