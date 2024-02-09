@@ -251,47 +251,51 @@ export class AuthController {
   }
   @httpGet("/login/success")
   async LoginSuccess(@request() req: Request, @response() resp: Response) {
-    const data = req.headers.cookie.split("; ")
-    let avtValue = null;
-    let sValue = null
-    let pValue = null
-    let eValue = null
-    for (const item of data) {
-      avtValue = extractValue(item, "_avt");
-      if (avtValue !== null) {
-        break;
+    if (req.headers.cookie) {
+      const data = req.headers.cookie.split("; ")
+      let avtValue = null;
+      let sValue = null
+      let pValue = null
+      let eValue = null
+      for (const item of data) {
+        avtValue = extractValue(item, "_avt");
+        if (avtValue !== null) {
+          break;
+        }
       }
-    }
-    for (const item of data) {
-      sValue = extractValue(item, "_s");
-      if (sValue !== null) {
-        break;
+      for (const item of data) {
+        sValue = extractValue(item, "_s");
+        if (sValue !== null) {
+          break;
+        }
       }
-    }
-    for (const item of data) {
-      pValue = extractValue(item, "_p");
-      if (pValue !== null) {
-        break;
+      for (const item of data) {
+        pValue = extractValue(item, "_p");
+        if (pValue !== null) {
+          break;
+        }
       }
-    }
-    for (const item of data) {
-      eValue = extractValue(item, "_e");
-      if (eValue !== null) {
-        break;
+      for (const item of data) {
+        eValue = extractValue(item, "_e");
+        if (eValue !== null) {
+          break;
+        }
       }
+      const res = await this._service.HandleSetupCredential(sValue, pValue, eValue)
+      resp.clearCookie("_p").clearCookie("_e").clearCookie("_s").clearCookie("_avt")
+      return resp.cookie('rft', res['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 2 * 60 * 60 * 1000 }).json({
+        isLoginBefore: res.isLoginBefore,
+        id: res['id'],
+        picture: avtValue,
+        email: res['email'],
+        full_name: res['fullName'],
+        user_name: res['userName'],
+        access_token: res['accessToken'],
+        provider: pValue
+      });
+    } else {
+
     }
-    const res = await this._service.HandleSetupCredential(sValue, pValue, eValue)
-    resp.clearCookie("_p").clearCookie("_e").clearCookie("_s").clearCookie("_avt")
-    return resp.cookie('rft', res['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 2 * 60 * 60 * 1000 }).json({
-      isLoginBefore: res.isLoginBefore,
-      id: res['id'],
-      picture: avtValue,
-      email: res['email'],
-      full_name: res['fullName'],
-      user_name: res['userName'],
-      access_token: res['accessToken'],
-      provider: pValue
-    });
   }
   @httpPost("/logout")
   async Logout(@response() res: Response) {
@@ -320,24 +324,4 @@ export class AuthController {
     const { email, oldPassword, newPassword } = body
     await this._service.ChangePassword(email, oldPassword, newPassword)
   }
-  // @httpGet("/oauth2")
-  // async GetData(@request() req: Request, @response() res: Response) {
-  //   // console.log(req.query["code"])
-  //   const code = req.query["code"]
-  //   const redirectUrl = "http://localhost:80/api/v1/auth/oauth2"
-  //   const oAuth2Client = new OAuth2Client(
-  //     config["GOOGLE_CLIENT_ID"],
-  //     config["GOOGLE_CLIENT_SECRET"],
-  //     redirectUrl,
-  //   )
-  //   const r = await oAuth2Client.getToken(code as string);
-  //   // oAuth2Client.setCredentials(r.tokens)
-
-  //   console.log(r.tokens.access_token)
-  //   // const ACT = oAuth2Client.credentials.access_token
-  //   const response = await axios.get(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${r.tokens.access_token}`);
-  //   console.log(response.data);
-
-  //   res.redirect("http://localhost:5173/setup?email")
-  // }
 }

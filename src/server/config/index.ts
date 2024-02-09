@@ -3,7 +3,9 @@ import { AuthnOptions, Prisma, PrismaClient, User } from '@prisma/client';
 import { config } from '../../config';
 import Redis from 'ioredis';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+    log: process.env.NODE_ENV !== "production" ? ["info"] : undefined
+});
 
 const MAX_RETRY = 3;
 export const redis = new Redis({

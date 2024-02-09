@@ -1,6 +1,6 @@
 import { id, inject, injectable } from 'inversify';
 import jwt from 'jsonwebtoken';
-import { getService, logger } from '../../../common';
+import { logger } from '../../../common';
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuthRepository } from '../repository/auth.repository';
 import { FacebookUserType, GithubUserType, GoogleUserType, StrictUnion, TYPES } from '../@types';
@@ -86,7 +86,7 @@ export class AuthService implements IAuhtService {
       secret: existCredential.secret!,
     });
 
-    const delta = totp.validate({ token, window: 2 });
+    const delta = totp.validate({ token, window: 0 });
 
     if (delta === null) {
       throw new WrongCredentials()
@@ -142,7 +142,7 @@ export class AuthService implements IAuhtService {
       secret: existCredential.secret!,
     });
 
-    const delta = totp.validate({ token, window: 2 });
+    const delta = totp.validate({ token, window: 0 });
 
     if (delta === null) {
       throw new WrongCredentials()
@@ -537,37 +537,29 @@ export class AuthService implements IAuhtService {
       password: true,
     }
     try {
-      const target = await getService('user-service');
-      if (target) {
-        const res = (await RabbitMQClient.clientProduce("user-queue", {
-          type: 'get-user-by-email',
-          payload: { email: email },
-        })) as IMessageResponse;
-        if (res.code !== 1200) {
-          return {
-            opts
-          };
-        }
-        const optionsKey = await this._authRepo.LoginOptions(res.payload["userId"])
-        if (!optionsKey || optionsKey.devices.length === 0) {
-          return {
-            opts
-          }
-        }
-        return { opts: { ...opts, passkey: true } };
-      } else {
-        throw new InternalError();
+      const res = (await RabbitMQClient.clientProduce("user-queue", {
+        type: 'get-user-by-email',
+        payload: { email: email },
+      })) as IMessageResponse;
+      if (res.code !== 1200) {
+        return {
+          opts
+        };
       }
+      const optionsKey = await this._authRepo.LoginOptions(res.payload["userId"])
+      if (!optionsKey || optionsKey.devices.length === 0) {
+        return {
+          opts
+        }
+      }
+      return { opts: { ...opts, passkey: true } };
+
     } catch (error) {
       logger.error(error);
       return { opts }
     }
   }
   async WebAuthnRegistrationOptions(email: string) {
-    const target = await getService('user-service');
-    if (!target) {
-      throw new InternalError();
-    }
     const res = (await RabbitMQClient.clientProduce("user-queue", {
       type: 'get-user-by-email',
       payload: {
@@ -604,10 +596,6 @@ export class AuthService implements IAuhtService {
   }
   async WebAuthnRegistrationVerification(credential: any) {
     try {
-      const target = await getService('user-service');
-      if (!target) {
-        throw new InternalError();
-      }
       const res = (await RabbitMQClient.clientProduce("user-queue", {
         type: 'get-user-by-email',
         payload: {
@@ -671,10 +659,6 @@ export class AuthService implements IAuhtService {
   }
   async WebAuthnLoginOptions(email: string) {
     try {
-      const target = await getService('user-service');
-      if (!target) {
-        throw new InternalError();
-      }
       const res = (await RabbitMQClient.clientProduce("user-queue", {
         type: 'get-user-by-email',
         payload: {
@@ -709,10 +693,6 @@ export class AuthService implements IAuhtService {
     }
   }
   async WebAuthnLoginVerification(email: string, data: any) {
-    const target = await getService('user-service');
-    if (!target) {
-      throw new InternalError();
-    }
     const res = (await RabbitMQClient.clientProduce("user-queue", {
       type: 'get-user-by-email',
       payload: {
