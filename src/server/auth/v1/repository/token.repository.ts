@@ -94,16 +94,16 @@ export class TokenRepository implements ITokenRepository {
   }
   CreateTokens(data: string, privateKey: string): CreateTokens {
     const accessToken = jwt.sign({
-      sub: data
+      // sub: data
     }, privateKey, {
       algorithm: 'RS256',
-      expiresIn: '3 days',
+      expiresIn: '30s',
     });
     const refreshToken = jwt.sign({
-      sub: data
+      // sub: data
     }, privateKey, {
       algorithm: 'RS256',
-      expiresIn: '2 days',
+      expiresIn: '1m',
     });
     return { accessToken, refreshToken };
   }

@@ -25,3 +25,8 @@ export class WrongCredentials extends BaseError {
     super(StatusCode.EXPECTATION_FAILED, "wrong credentials")
   }
 }
+export class Forbidden extends BaseError {
+  constructor() {
+    super(StatusCode.FORBIDDEN, "forbidden")
+  }
+}

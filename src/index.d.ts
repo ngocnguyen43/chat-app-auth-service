@@ -1,42 +1,26 @@
+import { Express } from 'express';
 declare namespace NodeJS {
   export interface global {
     abc: string;
   }
 }
-declare module '@v1' {
-  export interface AuthCreateDto {
-    id: string;
-    createdAt: string;
-    updatedAt: string
-  }
-  export interface AuthnPasswordDto {
-    id: string;
-    pasword: string;
-  }
-  export interface IPasswordLoginDto {
-    email: string;
-    password: string;
-  }
-  export interface ILoginOptionsDto {
-    email: string;
-  }
-  interface IAddGoogleDto {
-    id: string;
-    email: string;
-    aud: string;
-  }
-  type OAuthType = 'google' | 'facebook' | 'github';
-  interface IGoogleLoginId {
-    credential: string;
-  }
-  interface IWebAuthnRegisterOptions {
-    email: string;
-  }
-  interface IWebAuthnLoginOptions {
-    email: string;
-  }
-  interface IWebAuthnLoginVerification {
-    email: string;
-    data: any;
+declare global {
+  namespace Express {
+    export interface Request {
+      accessToken: string;
+      refreshToken: string;
+      isAccessTokenExpire: boolean;
+      userCredentials:
+      {
+        id: string;
+        userId: string;
+        publicKey: string;
+        refreshToken: string;
+        refreshTokenUsed: Prisma.JsonValue;
+        updatedAt: string;
+
+      }
+    }
   }
 }
+

@@ -93,3 +93,38 @@ export type PasskeysValuesType = {
   }[],
   webauthn: boolean
 }
+export interface AuthCreateDto {
+  id: string;
+  createdAt: string;
+  updatedAt: string
+}
+export interface AuthnPasswordDto {
+  id: string;
+  pasword: string;
+}
+export interface IPasswordLoginDto {
+  email: string;
+  password: string;
+}
+export interface ILoginOptionsDto {
+  email: string;
+}
+export interface IAddGoogleDto {
+  id: string;
+  email: string;
+  aud: string;
+}
+export type OAuthType = 'google' | 'facebook' | 'github';
+export interface IGoogleLoginId {
+  credential: string;
+}
+export interface IWebAuthnRegisterOptions {
+  email: string;
+}
+export interface IWebAuthnLoginOptions {
+  email: string;
+}
+export interface IWebAuthnLoginVerification {
+  email: string;
+  data: any;
+}

@@ -13,7 +13,7 @@ import {
   ITokenRepository,
   TokenRepository,
 } from './auth/v1';
-import { RequestValidator } from './auth/v1/middleware';
+import { AccessTokenMiddleware, RequestValidator, MergeTokensMiddllware, RefreshTokenMiddleware } from './auth/v1/middleware';
 
 const thirdPartyDependencies = new ContainerModule((bind) => {
   bind<PrismaClient>(TYPES.Prisma).toConstantValue(prisma);
@@ -26,6 +26,9 @@ const applicationDependencies = new ContainerModule((bind) => {
   bind<IAuthRepository>(TYPES.AuthRepository).to(AuthRepository);
   bind<ITokenRepository>(TYPES.TokenRepository).to(TokenRepository);
   bind<RequestValidator>(RequestValidator).toSelf();
+  bind<MergeTokensMiddllware>(MergeTokensMiddllware).toSelf()
+  bind<AccessTokenMiddleware>(AccessTokenMiddleware).toSelf()
+  bind<RefreshTokenMiddleware>(RefreshTokenMiddleware).toSelf()
   // ..
 });
 

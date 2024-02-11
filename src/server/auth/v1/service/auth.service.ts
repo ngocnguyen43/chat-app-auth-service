@@ -3,9 +3,8 @@ import jwt from 'jsonwebtoken';
 import { logger } from '../../../common';
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuthRepository } from '../repository/auth.repository';
-import { FacebookUserType, GithubUserType, GoogleUserType, StrictUnion, TYPES } from '../@types';
+import { FacebookUserType, GithubUserType, GoogleUserType, IPasswordLoginDto, StrictUnion, TYPES } from '../@types';
 import { RegisterDto } from '../controller/auth.controller';
-import { IPasswordLoginDto } from '@v1';
 import { InternalError, NotFound, WrongCredentials, WrongPassword } from '../../../libs/base-exception';
 import { generateKeyPairSync, randomUUID } from 'crypto';
 import { toDataURL } from "qrcode"
@@ -25,9 +24,9 @@ import {
 import base64url from 'base64url';
 import { ITokenRepository } from '../repository/token.repository';
 import { decode, decrypt, generateRandomBase32, randomBytesAsync, splitPartsKey } from '../../../utils';
-import { config } from '../../../config';
+import { Prisma, config } from '../../../config';
 export interface IAuhtService {
-  PasswordLogin(dto: IPasswordLoginDto): Promise<any>;
+  PasswordLogin(dto: IPasswordLoginDto): Promise<{ access: string[], refresh: string[] }>;
   Registration(dto: RegisterDto): Promise<any>;
   LoginOptions(email: string): Promise<any>;
   WebAuthnRegistrationOptions(email: string): Promise<any>;
@@ -50,6 +49,7 @@ export interface IAuhtService {
   Find2Fa(email: string): Promise<{ "2fa": boolean }>
   Delete2FA(email: string): Promise<void>
   Validate2FA(email: string, token: string): Promise<void>
+  FindTokens(id: string): Promise<ReturnType<ITokenRepository["FindTokensByUserId"]>>
 }
 interface IMessageResponse {
   code: number;
@@ -65,6 +65,10 @@ export class AuthService implements IAuhtService {
     @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
   ) { }
+  async FindTokens(id: string): Promise<ReturnType<ITokenRepository["FindTokensByUserId"]>> {
+    return await this._tokenRepo.FindTokensByUserId(id)
+  }
+
   async Validate2FA(email: string, token: string): Promise<void> {
     const res = (await RabbitMQClient.clientProduce('user-queue', {
       type: 'get-user-by-email',
@@ -197,7 +201,6 @@ export class AuthService implements IAuhtService {
       }
       await this._authRepo.UpdatePassword(newPassword, res.payload['userId'])
     }
-
   }
   async DeletePasskeys(base64string: string, userId: string): Promise<void> {
     await this._authRepo.DeletePasskeys(base64string, userId)
@@ -476,6 +479,11 @@ export class AuthService implements IAuhtService {
       federation[0].some((item) => item.hasOwnProperty(federation[1]))
     );
   }
+  SplitToken(token: string) {
+    const splitted = token.split(".")
+    if (splitted.length !== 3) throw new InternalError()
+    return [splitted.splice(0, 2).join("."), splitted.at(-1)]
+  }
   async PasswordLogin(dto: IPasswordLoginDto) {
     const res = (await RabbitMQClient.clientProduce('user-queue', {
       type: 'get-user-by-email',
@@ -493,7 +501,11 @@ export class AuthService implements IAuhtService {
       const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
       const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
       await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-      return { ok: 'OK', res: res['payload'], accessToken, refreshToken };
+      const proccessACT = this.SplitToken(accessToken)
+      const proccessedRFT = this.SplitToken(refreshToken)
+
+      return { access: proccessACT, refresh: proccessedRFT }
+      // return { ok: 'OK', res: res['payload'], accessToken, refreshToken };
     }
     throw new WrongPassword();
   }

@@ -2,8 +2,7 @@ import { inject, injectable } from 'inversify';
 
 import { Prisma, PrismaClient } from '@prisma/client';
 
-import { PasskeysValuesType, TYPES } from '../@types';
-import { AuthCreateDto, AuthnPasswordDto, IAddGoogleDto, OAuthType } from '@v1';
+import { AuthCreateDto, AuthnPasswordDto, IAddGoogleDto, OAuthType, PasskeysValuesType, TYPES } from '../@types';
 import { Options, arraysEqual, decode, encode } from '../../../utils';
 import { InternalError, NotFound, WrongPassword } from '../../../libs/base-exception';
 import { AuthnOptions, User } from '../../../config';
