@@ -44,19 +44,21 @@ export class TokenRepository implements ITokenRepository {
     const existedToken = await this.FindTokensByUserId(id);
     const refreshTokenUsed = existedToken.refreshTokenUsed as Prisma.JsonArray;
     const refreshToken = existedToken.refreshToken;
-    execute.push(
-      this._db.token.update({
-        data: {
-          publicKey: '',
-          refreshToken: '',
-          refreshTokenUsed: [...refreshTokenUsed, refreshToken],
-        },
-        where: {
-          userId: id,
-        },
-      }),
-    );
-    await this._db.$transaction(execute);
+    if (refreshToken.length > 0) {
+      execute.push(
+        this._db.token.update({
+          data: {
+            publicKey: '',
+            refreshToken: '',
+            refreshTokenUsed: [...refreshTokenUsed, refreshToken],
+          },
+          where: {
+            userId: id,
+          },
+        }),
+      );
+      await this._db.$transaction(execute);
+    }
   }
   async SaveTokens(id: string, publicKey: string, refreshToken: string): Promise<void> {
     const execute: string | any[] = [];
@@ -94,13 +96,13 @@ export class TokenRepository implements ITokenRepository {
   }
   CreateTokens(data: string, privateKey: string): CreateTokens {
     const accessToken = jwt.sign({
-      // sub: data
+      sub: data
     }, privateKey, {
       algorithm: 'RS256',
       expiresIn: '30s',
     });
     const refreshToken = jwt.sign({
-      // sub: data
+      sub: data
     }, privateKey, {
       algorithm: 'RS256',
       expiresIn: '1m',
@@ -161,7 +163,7 @@ export class TokenRepository implements ITokenRepository {
     await this._db.$transaction(execute);
     return { publicKey, privateKey };
   }
-  async RefreshToken(id: string, data: any, refreshTokenUsed: string) {
+  async RefreshToken(id: string, data: string, refreshTokenUsed: string) {
     const { publicKey, privateKey } = await this.UpdateKeys(id, refreshTokenUsed);
     console.log({ publicKey, privateKey });
     const accessToken = jwt.sign(data, privateKey, {

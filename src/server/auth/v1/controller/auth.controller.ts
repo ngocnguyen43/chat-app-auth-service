@@ -55,18 +55,21 @@ export class AuthController {
     return res.send(`<img src="${url}"  width="200" alt="" srcSet="" />
     `)
   }
-  @httpPost('/register', ...Middlewares.postRegisterCheck, RequestValidator)
+  @httpPost('/register', ...Middlewares.postRegisterCheck)
   async Register(@request() req: Request, @requestBody() dto: RegisterDto, @response() res: Response) {
-    dto.userId = randomUUID();
+    const id = randomUUID();
+    dto.userId = id
     const result = await this._service.Registration(dto)
-    return res.cookie('token', result['refreshToken']).json({
-      ok: 'ok',
-      id: result['res']['userId'],
-      email: result['res']['email'],
-      full_name: result['res']['fullName'],
-      user_name: result['res']['userName'],
-      access_token: result['accessToken'],
-    });
+    // return res.cookie('token', result['refreshToken']).json({
+    //   ok: 'ok',
+    //   id: result['res']['userId'],
+    //   email: result['res']['email'],
+    //   full_name: result['res']['fullName'],
+    //   user_name: result['res']['userName'],
+    //   access_token: result['accessToken'],
+    // });
+    this.CookieReturn(res, { ...result })
+    res.json(id)
   }
   @httpPost('/login-options')
   async LoginOptions(@requestBody() dto: ILoginOptionsDto, @response() res: Response) {
@@ -75,18 +78,8 @@ export class AuthController {
     return res.json({ ...otps, ...mf });
   }
 
-  @httpPost('/login-password')
-  async LoginPassword(@requestBody() dto: IPasswordLoginDto, @request() req: Request, @response() res: Response) {
-    const result = await this._service.PasswordLogin(dto);
-    // return res.cookie('rft', result['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 2 * 60 * 60 * 1000 }).json({
-    //   id: result['res']['userId'],
-    //   email: result['res']['email'],
-    //   full_name: result['res']['fullName'],
-    //   user_name: result['res']['userName'],
-    //   access_token: result['accessToken'],
-    // });
-    const { access, refresh } = result
-
+  CookieReturn(res: Response, tokens: { access: string[], refresh: string[] }) {
+    const { access, refresh } = tokens
     res
       .cookie("accessH", access[0], {
         sameSite: "strict",
@@ -115,6 +108,11 @@ export class AuthController {
           domain: config["COOKIES_DOMAIN"],
           maxAge: 2 * 60 * 60 * 1000
         })
+  }
+  @httpPost('/login-password')
+  async LoginPassword(@requestBody() dto: IPasswordLoginDto, @request() req: Request, @response() res: Response) {
+    const result = await this._service.PasswordLogin(dto);
+    this.CookieReturn(res, result)
   }
   @httpGet("/login-test", MergeTokensMiddllware, AccessTokenMiddleware, RefreshTokenMiddleware)
   async LoginTest(@response() res: Response) {

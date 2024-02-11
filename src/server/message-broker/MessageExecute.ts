@@ -1,5 +1,6 @@
 import { inject, injectable } from 'inversify';
 import { IAuhtService, TYPES } from '../auth';
+import { handleMessageError } from '../utils';
 
 export interface IMessageExecute {
   execute(name: string, payload: any): Promise<unknown>;
@@ -21,6 +22,16 @@ export class MessageExecute implements IMessageExecute {
       case 'delete-user':
         res = { 'delete-user': 'ok' };
         break;
+      case 'check-tokens':
+        {
+          const { user, accessToken, refreshToken } = payload as {
+            user: string,
+            accessToken: string,
+            refreshToken: string
+          }
+          res = await handleMessageError(this._service.HandleTokens.bind(this._service), user, accessToken, refreshToken);
+          break;
+        }
       case 'test':
         res = { ok: 'OK' };
         break;

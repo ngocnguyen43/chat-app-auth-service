@@ -19,7 +19,8 @@ declare global {
         refreshTokenUsed: Prisma.JsonValue;
         updatedAt: string;
 
-      }
+      };
+      userId: string
     }
   }
 }

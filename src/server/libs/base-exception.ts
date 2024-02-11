@@ -30,3 +30,8 @@ export class Forbidden extends BaseError {
     super(StatusCode.FORBIDDEN, "forbidden")
   }
 }
+export class InvalidCredentials extends BaseError {
+  constructor() {
+    super(StatusCode.BAD_REQUEST, Reasons.BAD_REQUEST)
+  }
+}

@@ -8,7 +8,7 @@ import { Forbidden } from '../../../libs/base-exception';
 import { TYPES } from '../@types';
 import { IAuhtService } from '../service/auth.service';
 import jwt from "jsonwebtoken"
-import { Prisma } from '../../../config';
+import { Prisma, config } from '../../../config';
 
 @injectable()
 export class RequestValidator extends BaseMiddleware {
@@ -24,7 +24,16 @@ export class RequestValidator extends BaseMiddleware {
 @injectable()
 export class MergeTokensMiddllware extends BaseMiddleware {
   public handler(req: Request, res: Response, next: NextFunction): any {
-    const data = req.headers.cookie.split("; ")
+    const cookies = req.headers.cookie
+    const userId = req.headers["x-id"] as string
+    if (!userId) {
+      throw new Forbidden()
+    }
+    if (!cookies) {
+      throw new Forbidden()
+    }
+    req.userId = userId
+    const data = cookies.split("; ")
     const objects = {};
     data.forEach(item => {
       const [key, value] = item.split('=');
@@ -48,14 +57,15 @@ export class AccessTokenMiddleware extends BaseMiddleware {
   public async handler(req: Request, res: Response, next: NextFunction): Promise<any> {
     const at = req.headers.authorization.split(" ")[1];
 
-    const userId = req.headers["x-id"] as string
-    console.log(at);
+    const userId = req.userId
 
     const credentials = await this._service.FindTokens(userId)
     req.userCredentials = credentials
     if (at.split(".").length !== 3)
       return res.status(StatusCode.FORBIDDEN).json({ "error": "forbidden" })
     try {
+      console.log({ at, credentials });
+
       const verify = jwt.verify(at, credentials.publicKey);
       req.isAccessTokenExpire = false;
     } catch (error) {
@@ -67,16 +77,19 @@ export class AccessTokenMiddleware extends BaseMiddleware {
 }
 @injectable()
 export class RefreshTokenMiddleware extends BaseMiddleware {
-
-  public handler(req: Request, res: Response, next: NextFunction): any {
+  constructor(@inject(TYPES.AuthService) private readonly _service: IAuhtService) {
+    super()
+  }
+  public async handler(req: Request, res: Response, next: NextFunction): Promise<any> {
     const isAccessTokenExpire = req.isAccessTokenExpire
     if (!isAccessTokenExpire) {
+      console.log("no need ")
       return next();
     }
 
     const rt = req.refreshToken
     const credentials = req.userCredentials
-
+    const userId = req.userId
     const isNotValidToken =
       !Object.keys(credentials).length ||
       rt.split(".").length !== 3 ||
@@ -84,17 +97,46 @@ export class RefreshTokenMiddleware extends BaseMiddleware {
       (credentials.refreshTokenUsed as Prisma.JsonArray).includes(rt)
 
     if (isNotValidToken) {
+      await this._service.ClearTokens(userId)
       return res.status(StatusCode.FORBIDDEN).json({ "error": "forbidden" })
     }
 
     try {
       const verify = jwt.verify(rt, credentials.publicKey);
-      console.log(verify);
-      res.cookie("abc", "abc")
+      const { access, refresh } = await this._service.CreateAndSaveTokens(userId)
+      res
+        .cookie("accessH", access[0], {
+          sameSite: "strict",
+          secure: process.env.NODE_ENV === "production",
+          domain: config["COOKIES_DOMAIN"],
+          maxAge: 2 * 60 * 60 * 1000
+        })
+        .cookie("accessS", access[1], {
+          sameSite: "strict",
+          secure: process.env.NODE_ENV === "production",
+          httpOnly: true,
+          domain: config["COOKIES_DOMAIN"],
+          maxAge: 2 * 60 * 60 * 1000
+        })
+        .cookie("refreshH", refresh[0], {
+          sameSite: "strict",
+          secure: process.env.NODE_ENV === "production",
+          domain: config["COOKIES_DOMAIN"],
+          maxAge: 4 * 60 * 60 * 1000
+        })
+        .cookie("refreshS", refresh[1],
+          {
+            sameSite: "strict",
+            secure: process.env.NODE_ENV === "production",
+            httpOnly: true,
+            domain: config["COOKIES_DOMAIN"],
+            maxAge: 2 * 60 * 60 * 1000
+          })
       return next()
     } catch (error) {
-      console.log(error);
-      throw new Forbidden()
+      await this._service.ClearTokens(userId)
+      return res.status(StatusCode.FORBIDDEN).json({ "error": "forbidden" })
+
     }
   }
 }

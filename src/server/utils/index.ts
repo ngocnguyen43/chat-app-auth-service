@@ -137,3 +137,14 @@ export const generateRandomBase32 = (): string => {
   return str;
 };
 export const randomBytesAsync = promisify(generateRandomBase32);
+
+export async function handleMessageError<P extends any[]>(fn: (...agrs: P) => Promise<any>, ...agrs: P) {
+  return fn(...agrs)
+    .then((res) => {
+      return { code: 1200, message: 'ok', payload: res };
+    })
+    .catch((err) => {
+      console.log(err);
+      return { code: 1400, mesage: err.message };
+    });
+}

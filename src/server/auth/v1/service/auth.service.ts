@@ -5,7 +5,7 @@ import { RabbitMQClient } from '../../../message-broker';
 import { IAuthRepository } from '../repository/auth.repository';
 import { FacebookUserType, GithubUserType, GoogleUserType, IPasswordLoginDto, StrictUnion, TYPES } from '../@types';
 import { RegisterDto } from '../controller/auth.controller';
-import { InternalError, NotFound, WrongCredentials, WrongPassword } from '../../../libs/base-exception';
+import { InternalError, InvalidCredentials, NotFound, WrongCredentials, WrongPassword } from '../../../libs/base-exception';
 import { generateKeyPairSync, randomUUID } from 'crypto';
 import { toDataURL } from "qrcode"
 import * as OTPAuth from "otpauth";
@@ -24,10 +24,12 @@ import {
 import base64url from 'base64url';
 import { ITokenRepository } from '../repository/token.repository';
 import { decode, decrypt, generateRandomBase32, randomBytesAsync, splitPartsKey } from '../../../utils';
-import { Prisma, config } from '../../../config';
+import { config } from '../../../config';
 export interface IAuhtService {
+  ClearTokens(id: string): Promise<void>
+  HandleTokens(id: string, accessToken: string, refreshToken: string): Promise<any>;
   PasswordLogin(dto: IPasswordLoginDto): Promise<{ access: string[], refresh: string[] }>;
-  Registration(dto: RegisterDto): Promise<any>;
+  Registration(dto: RegisterDto): ReturnType<IAuhtService["PasswordLogin"]>;
   LoginOptions(email: string): Promise<any>;
   WebAuthnRegistrationOptions(email: string): Promise<any>;
   WebAuthnRegistrationVerification(credential: any): Promise<any>;
@@ -50,6 +52,10 @@ export interface IAuhtService {
   Delete2FA(email: string): Promise<void>
   Validate2FA(email: string, token: string): Promise<void>
   FindTokens(id: string): Promise<ReturnType<ITokenRepository["FindTokensByUserId"]>>
+  CreateAndSaveTokens(id: string): Promise<{
+    access: string[];
+    refresh: string[];
+  }>
 }
 interface IMessageResponse {
   code: number;
@@ -58,13 +64,36 @@ interface IMessageResponse {
 }
 type ValidOption = [object[], string];
 
-
+type JwtVerifyType = {
+  sub: string,
+  iat: number,
+  exp: number
+}
 @injectable()
 export class AuthService implements IAuhtService {
   constructor(
     @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
   ) { }
+  async HandleTokens(id: string, accessToken: string, refreshToken: string) {
+    const credentials = await this.FindTokens(id);
+    try {
+      const verify = jwt.verify(accessToken, credentials.publicKey) as JwtVerifyType
+      return { id: verify.sub, access: null, refresh: null };
+    } catch (error) {
+    }
+    try {
+      const verify = jwt.verify(refreshToken, credentials.publicKey) as JwtVerifyType
+      const tokens = await this.CreateAndSaveTokens(id)
+      return { id: verify.sub, ...tokens };
+    } catch (error) {
+      this.ClearTokens(id)
+      throw new InvalidCredentials();
+    }
+  }
+  async ClearTokens(id: string): Promise<void> {
+    return await this._tokenRepo.ClearToken(id)
+  }
   async FindTokens(id: string): Promise<ReturnType<ITokenRepository["FindTokensByUserId"]>> {
     return await this._tokenRepo.FindTokensByUserId(id)
   }
@@ -498,16 +527,25 @@ export class AuthService implements IAuhtService {
       if (!isSimilar) {
         throw new WrongPassword();
       }
-      const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-      const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(res.payload["userId"], privateKey);
-      await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-      const proccessACT = this.SplitToken(accessToken)
-      const proccessedRFT = this.SplitToken(refreshToken)
+      const tokens = await this.CreateAndSaveTokens(res.payload["userId"])
 
-      return { access: proccessACT, refresh: proccessedRFT }
+      return { ...tokens }
       // return { ok: 'OK', res: res['payload'], accessToken, refreshToken };
     }
     throw new WrongPassword();
+  }
+  async CreateAndSaveTokens(id: string) {
+    try {
+
+      const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
+      const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(id, privateKey);
+      await this._tokenRepo.SaveTokens(id, publicKey, refreshToken);
+      const proccessACT = this.SplitToken(accessToken)
+      const proccessedRFT = this.SplitToken(refreshToken)
+      return { access: proccessACT, refresh: proccessedRFT }
+    } catch (error) {
+      console.log(error);
+    }
   }
   async Registration(dto: RegisterDto) {
     const res = (await RabbitMQClient.clientProduce('user-queue', {
@@ -529,6 +567,14 @@ export class AuthService implements IAuhtService {
             updatedAt: dto.updatedAt
           },
         });
+        RabbitMQClient.messageProduce("user-queue", {
+          type: "create-user-avatar",
+          payload: {
+            id: dto.userId,
+            avatar: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png",
+            bio: ""
+          }
+        })
         RabbitMQClient.messageProduce('chat-queue', {
           type: 'add-user',
           payload: {
@@ -540,9 +586,9 @@ export class AuthService implements IAuhtService {
         return login;
       } catch (error) {
         logger.error(error['message']);
+        throw new InvalidCredentials()
       }
     }
-    return { message: 'email already in used!' };
   }
   async LoginOptions(email: string) {
     const opts = {
