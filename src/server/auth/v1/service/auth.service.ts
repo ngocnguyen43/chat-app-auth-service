@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { logger } from '../../../common';
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuthRepository } from '../repository/auth.repository';
-import { FacebookUserType, GithubUserType, GoogleUserType, IPasswordLoginDto, StrictUnion, TYPES } from '../@types';
+import { FacebookUserType, GithubUserType, GoogleUserType, IMessageResponse, IPasswordLoginDto, JwtVerifyType, StrictUnion, TYPES, ValidOption } from '../@types';
 import { RegisterDto } from '../controller/auth.controller';
 import { InternalError, InvalidCredentials, NotFound, WrongCredentials, WrongPassword } from '../../../libs/base-exception';
 import { generateKeyPairSync, randomUUID } from 'crypto';
@@ -35,7 +35,6 @@ export interface IAuhtService {
   WebAuthnRegistrationVerification(credential: any): Promise<any>;
   WebAuthnLoginOptions(email: string): Promise<any>;
   WebAuthnLoginVerification(email: string, data: any): Promise<any>;
-  RefreshToken(email: string, refershToken: string): Promise<any>;
   Test(): Promise<any>;
   GetPublicKeyFromUserId(id: string): Promise<string>;
   TestCnt(): Promise<void>
@@ -56,25 +55,23 @@ export interface IAuhtService {
     access: string[];
     refresh: string[];
   }>
+  GetUserByEmail(email: string): Promise<string>
 }
-interface IMessageResponse {
-  code: number;
-  message: string;
-  payload: any;
-}
-type ValidOption = [object[], string];
 
-type JwtVerifyType = {
-  sub: string,
-  iat: number,
-  exp: number
-}
 @injectable()
 export class AuthService implements IAuhtService {
   constructor(
     @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
   ) { }
+  async GetUserByEmail(email: string): Promise<string> {
+    const res = (await RabbitMQClient.clientProduce('user-queue', {
+      type: 'get-user-by-email',
+      payload: { email },
+    })) as IMessageResponse;
+
+    return res.payload["userId"]
+  }
   async HandleTokens(id: string, accessToken: string, refreshToken: string) {
     const credentials = await this.FindTokens(id);
     try {
@@ -469,24 +466,6 @@ export class AuthService implements IAuhtService {
       return 'nah';
     }
   }
-  async RefreshToken(email: string, refershToken: string): Promise<any> {
-    const res = (await RabbitMQClient.clientProduce('user-queue', {
-      type: 'get-user-by-email',
-      payload: { email: email },
-    })) as IMessageResponse;
-    if (res.code !== 1200) {
-      throw new NotFound();
-    }
-    const tokens = await this._tokenRepo.FindTokensByUserId(res.payload['userId']);
-    try {
-      const verify = jwt.verify(refershToken, tokens.publicKey);
-      console.log(verify);
-      return verify;
-    } catch (error) {
-      console.log(error['message']);
-      return { err: 'err' };
-    }
-  }
   async Test(): Promise<any> {
     const { privateKey, publicKey } = generateKeyPairSync('rsa', {
       modulusLength: 2048,
@@ -571,7 +550,7 @@ export class AuthService implements IAuhtService {
           type: "create-user-avatar",
           payload: {
             id: dto.userId,
-            avatar: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png",
+            avatar: encodeURIComponent("https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png"),
             bio: ""
           }
         })
@@ -798,10 +777,7 @@ export class AuthService implements IAuhtService {
     const { verified, authenticationInfo } = verification;
     if (verified) {
       await this._authRepo.UpdatePasskeyCounter(authn.id, user.id, data['rawId'], authenticationInfo.newCounter);
-      const { privateKey, publicKey } = this._tokenRepo.CreateKeysPair();
-      const { accessToken, refreshToken } = this._tokenRepo.CreateTokens(userId, privateKey);
-      await this._tokenRepo.SaveTokens(res.payload['userId'], publicKey, refreshToken);
-      return { ok: 'OK', res: res['payload'], accessToken, refreshToken };
+      return userId
     } else {
       throw new WrongCredentials()
     }

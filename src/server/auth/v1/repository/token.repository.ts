@@ -16,7 +16,6 @@ export interface ITokenRepository {
   CreateTokens(data: string, privateKey: string): CreateTokens;
   FindTokensByUserId(id: string): Promise<Token | null>;
   UpdateKeys(userId: string, refreshToken: string): Promise<CreateKeys>;
-  RefreshToken(id: string, data: any, refreshTokenUsed: string): Promise<CreateTokens>;
   CreateKeysPair(): CreateKeys;
   SaveTokens(id: string, publicKey: string, refreshToken: string): Promise<void>;
   ClearToken(id: string): Promise<void>;
@@ -42,7 +41,9 @@ export class TokenRepository implements ITokenRepository {
   async ClearToken(id: string): Promise<void> {
     const execute: string | any[] = [];
     const existedToken = await this.FindTokensByUserId(id);
-    const refreshTokenUsed = existedToken.refreshTokenUsed as Prisma.JsonArray;
+
+
+    const refreshTokenUsed = existedToken.refreshTokenUsed as Prisma.JsonArray | [];
     const refreshToken = existedToken.refreshToken;
     if (refreshToken.length > 0) {
       execute.push(
@@ -105,7 +106,7 @@ export class TokenRepository implements ITokenRepository {
       sub: data
     }, privateKey, {
       algorithm: 'RS256',
-      expiresIn: '1m',
+      expiresIn: '3h',
     });
     return { accessToken, refreshToken };
   }
@@ -162,18 +163,5 @@ export class TokenRepository implements ITokenRepository {
     );
     await this._db.$transaction(execute);
     return { publicKey, privateKey };
-  }
-  async RefreshToken(id: string, data: string, refreshTokenUsed: string) {
-    const { publicKey, privateKey } = await this.UpdateKeys(id, refreshTokenUsed);
-    console.log({ publicKey, privateKey });
-    const accessToken = jwt.sign(data, privateKey, {
-      algorithm: 'RS256',
-      expiresIn: '2 days',
-    });
-    const refreshToken = jwt.sign(data, privateKey, {
-      algorithm: 'RS256',
-      expiresIn: '5s',
-    });
-    return { accessToken, refreshToken };
   }
 }

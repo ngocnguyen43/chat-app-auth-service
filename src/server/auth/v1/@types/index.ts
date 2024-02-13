@@ -128,3 +128,15 @@ export interface IWebAuthnLoginVerification {
   email: string;
   data: any;
 }
+export interface IMessageResponse {
+  code: number;
+  message: string;
+  payload: any;
+}
+export type ValidOption = [object[], string];
+
+export type JwtVerifyType = {
+  sub: string,
+  iat: number,
+  exp: number
+}

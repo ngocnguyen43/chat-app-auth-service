@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { inject } from 'inversify';
-import { controller, httpDelete, httpGet, httpPatch, httpPost, httpPut, queryParam, request, requestBody, response } from 'inversify-express-utils';
+import { controller, httpDelete, httpGet, httpPatch, httpPost, httpPut, queryParam, request, requestBody, requestHeaders, response } from 'inversify-express-utils';
 
 import { RabbitMQClient } from '../../../message-broker';
 import { IAuhtService } from '../service/auth.service';
@@ -29,16 +29,16 @@ const FB_AVATAR = "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622
 @controller('/api/v1/auth')
 export class AuthController {
   constructor(@inject(TYPES.AuthService) private readonly _service: IAuhtService) { }
-  @httpPatch("/validate-otp")
-  async Validate2FA(@requestBody() body: { email: string, token: string }) {
+  @httpPost("/validate-otp",)
+  async Validate2FA(@requestBody() body: { email: string, token: string }, @response() res: Response) {
     const { email, token } = body
     await this._service.Validate2FA(email, token)
   }
-  @httpDelete("/mf-otps")
+  @httpDelete("/mf-otps", MergeTokensMiddllware, AccessTokenMiddleware, RefreshTokenMiddleware)
   async Delete2FA(@queryParam("email") email: string) {
     await this._service.Delete2FA(email)
   }
-  @httpGet("/mf-otps")
+  @httpGet("/mf-otps", MergeTokensMiddllware, AccessTokenMiddleware, RefreshTokenMiddleware)
   async GetMFOTPS(@queryParam("email") email: string, @response() res: Response) {
     return res.json(await this._service.Find2Fa(email))
   }
@@ -47,7 +47,7 @@ export class AuthController {
     const { email, token } = body
     await this._service.Enable2FA(email, token)
   }
-  @httpGet("/generate-mfa")
+  @httpGet("/generate-mfa", MergeTokensMiddllware, AccessTokenMiddleware, RefreshTokenMiddleware)
   async GenerateMFA(
     @queryParam("email") email: string, @response() res: Response
   ) {
@@ -112,11 +112,16 @@ export class AuthController {
   @httpPost('/login-password')
   async LoginPassword(@requestBody() dto: IPasswordLoginDto, @request() req: Request, @response() res: Response) {
     const result = await this._service.PasswordLogin(dto);
+    const userId = await this._service.GetUserByEmail(dto.email)
     this.CookieReturn(res, result)
+    return res.json(userId)
   }
   @httpGet("/login-test", MergeTokensMiddllware, AccessTokenMiddleware, RefreshTokenMiddleware)
   async LoginTest(@response() res: Response) {
     return res.json({ "abc": "abc" })
+  }
+  @httpPost("/", MergeTokensMiddllware, AccessTokenMiddleware, RefreshTokenMiddleware)
+  async Authtest() {
   }
   @httpPost('/webauth-registration-options')
   async WebAuthnRegistrationOptions(@requestBody() dto: IWebAuthnRegisterOptions, @response() res: Response) {
@@ -136,13 +141,7 @@ export class AuthController {
   async WebAuthnLoginVerification(@requestBody() dto: IWebAuthnLoginVerification, @response() res: Response) {
     console.log(dto.email);
     const result = await this._service.WebAuthnLoginVerification(dto.email, dto.data);
-    return res.cookie('rft', result['refreshToken'], { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 2 * 60 * 60 * 1000 }).json({
-      id: result['res']['userId'],
-      email: result['res']['email'],
-      full_name: result['res']['fullName'],
-      user_name: result['res']['userName'],
-      access_token: result['accessToken'],
-    });
+    return res.json(result);
   }
   @httpGet('/test')
   async Test(@response() res: Response) {
@@ -163,12 +162,6 @@ export class AuthController {
     // const users = await this._service.Test();
     await this._service.TestCnt();
     return res.json({ msg: "OK" });
-  }
-  @httpPost('/refresh-token')
-  async RefreshToken(@request() req: Request, @response() res: Response) {
-    return res.json(
-      await this._service.RefreshToken(req.body['email'] as string, req.headers['x-refresh-token'] as string),
-    );
   }
   // @httpGet("/oauth-request")
   // async GetUrlOauth(@queryParam("mode") mode: "google" | "facebook" | "github", @response() res: Response) {
@@ -326,8 +319,9 @@ export class AuthController {
     }
   }
   @httpPost("/logout")
-  async Logout(@response() res: Response) {
-    res.clearCookie("rft");
+  async Logout(@requestHeaders("x-id") id: string, @response() res: Response) {
+    await this._service.ClearTokens(id)
+    res.clearCookie("accessH").clearCookie("accessS").clearCookie("refreshH").clearCookie("refreshS");
   }
   @httpPost("/update-status")
   async UpdateStatusCode(@request() req: Request, @requestBody() body: { provider: string, id: string }, @response() res: Response) {
