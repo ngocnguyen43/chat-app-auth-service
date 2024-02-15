@@ -27,6 +27,7 @@ import { decode, decrypt, generateRandomBase32, randomBytesAsync, splitPartsKey 
 import { config } from '../../../config';
 export interface IAuhtService {
   ClearTokens(id: string): Promise<void>
+  ClearRefreshTokensUsed(id: string): Promise<void>
   HandleTokens(id: string, accessToken: string, refreshToken: string): Promise<any>;
   PasswordLogin(dto: IPasswordLoginDto): Promise<{ access: string[], refresh: string[] }>;
   Registration(dto: RegisterDto): ReturnType<IAuhtService["PasswordLogin"]>;
@@ -34,7 +35,11 @@ export interface IAuhtService {
   WebAuthnRegistrationOptions(email: string): Promise<any>;
   WebAuthnRegistrationVerification(credential: any): Promise<any>;
   WebAuthnLoginOptions(email: string): Promise<any>;
-  WebAuthnLoginVerification(email: string, data: any): Promise<any>;
+  WebAuthnLoginVerification(email: string, data: any): Promise<{
+    access: string[];
+    refresh: string[];
+    userId: any;
+  }>;
   Test(): Promise<any>;
   GetPublicKeyFromUserId(id: string): Promise<string>;
   TestCnt(): Promise<void>
@@ -64,6 +69,11 @@ export class AuthService implements IAuhtService {
     @inject(TYPES.AuthRepository) private readonly _authRepo: IAuthRepository,
     @inject(TYPES.TokenRepository) private readonly _tokenRepo: ITokenRepository,
   ) { }
+  async ClearRefreshTokensUsed(id: string): Promise<void> {
+    const existTokens = await this._tokenRepo.FindTokensByUserId(id);
+    if (!existTokens) return
+    await this._tokenRepo.ClearRefreshTokensUsed(id)
+  }
   async GetUserByEmail(email: string): Promise<string> {
     const res = (await RabbitMQClient.clientProduce('user-queue', {
       type: 'get-user-by-email',
@@ -116,7 +126,7 @@ export class AuthService implements IAuhtService {
       secret: existCredential.secret!,
     });
 
-    const delta = totp.validate({ token, window: 0 });
+    const delta = totp.validate({ token, window: 1 });
 
     if (delta === null) {
       throw new WrongCredentials()
@@ -172,7 +182,7 @@ export class AuthService implements IAuhtService {
       secret: existCredential.secret!,
     });
 
-    const delta = totp.validate({ token, window: 0 });
+    const delta = totp.validate({ token, window: 1 });
 
     if (delta === null) {
       throw new WrongCredentials()
@@ -754,7 +764,7 @@ export class AuthService implements IAuhtService {
       }
     }
     if (!dbAuthenticator) {
-      return { ok: false };
+      throw new InvalidCredentials()
     }
     let verification: VerifiedAuthenticationResponse;
     try {
@@ -777,7 +787,8 @@ export class AuthService implements IAuhtService {
     const { verified, authenticationInfo } = verification;
     if (verified) {
       await this._authRepo.UpdatePasskeyCounter(authn.id, user.id, data['rawId'], authenticationInfo.newCounter);
-      return userId
+      const tokens = await this.CreateAndSaveTokens(res.payload["userId"])
+      return { userId, ...tokens }
     } else {
       throw new WrongCredentials()
     }

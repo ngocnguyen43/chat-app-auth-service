@@ -11,7 +11,7 @@ export interface IRabbitMQClient {
 }
 const EXCHANGE_NAME = 'm-broker';
 class RabbitMQClient implements IRabbitMQClient {
-  private constructor() {}
+  private constructor() { }
 
   private static instance: RabbitMQClient;
   private isInitialized = false;
@@ -53,7 +53,7 @@ class RabbitMQClient implements IRabbitMQClient {
 
         this.clientProducerChannel = await this.connection.createChannel();
         this.clientConsumerChanel = await this.connection.createChannel();
-        const { queue: clientReplyQueue } = await this.clientConsumerChanel.assertQueue('', { exclusive: true });
+        const { queue: clientReplyQueue } = await this.clientConsumerChanel.assertQueue("", { exclusive: true });
         this.eventEmitter = new EventEmitter();
         this.clientProducer = new Producer(this.clientProducerChannel, clientReplyQueue, this.eventEmitter);
         this.clientConsumer = new Consumer(this.clientConsumerChanel, clientReplyQueue, this.eventEmitter);

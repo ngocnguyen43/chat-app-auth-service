@@ -85,20 +85,20 @@ export class AuthController {
         sameSite: "strict",
         secure: process.env.NODE_ENV === "production",
         domain: config["COOKIES_DOMAIN"],
-        maxAge: 2 * 60 * 60 * 1000
+        maxAge: 31 * 24 * 60 * 60 * 1000
       })
       .cookie("accessS", access[1], {
         sameSite: "strict",
         secure: process.env.NODE_ENV === "production",
         httpOnly: true,
         domain: config["COOKIES_DOMAIN"],
-        maxAge: 2 * 60 * 60 * 1000
+        maxAge: 31 * 24 * 60 * 60 * 1000
       })
       .cookie("refreshH", refresh[0], {
         sameSite: "strict",
         secure: process.env.NODE_ENV === "production",
         domain: config["COOKIES_DOMAIN"],
-        maxAge: 4 * 60 * 60 * 1000
+        maxAge: 91 * 24 * 60 * 60 * 1000
       })
       .cookie("refreshS", refresh[1],
         {
@@ -106,7 +106,7 @@ export class AuthController {
           secure: process.env.NODE_ENV === "production",
           httpOnly: true,
           domain: config["COOKIES_DOMAIN"],
-          maxAge: 2 * 60 * 60 * 1000
+          maxAge: 91 * 24 * 60 * 60 * 1000
         })
   }
   @httpPost('/login-password')
@@ -140,8 +140,9 @@ export class AuthController {
   @httpPost('/webauth-login-verification')
   async WebAuthnLoginVerification(@requestBody() dto: IWebAuthnLoginVerification, @response() res: Response) {
     console.log(dto.email);
-    const result = await this._service.WebAuthnLoginVerification(dto.email, dto.data);
-    return res.json(result);
+    const { userId, ...rest } = await this._service.WebAuthnLoginVerification(dto.email, dto.data);
+    this.CookieReturn(res, rest)
+    return res.json(userId);
   }
   @httpGet('/test')
   async Test(@response() res: Response) {
@@ -321,6 +322,7 @@ export class AuthController {
   @httpPost("/logout")
   async Logout(@requestHeaders("x-id") id: string, @response() res: Response) {
     await this._service.ClearTokens(id)
+    await this._service.ClearRefreshTokensUsed(id)
     res.clearCookie("accessH").clearCookie("accessS").clearCookie("refreshH").clearCookie("refreshS");
   }
   @httpPost("/update-status")

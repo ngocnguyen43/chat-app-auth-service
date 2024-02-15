@@ -20,6 +20,7 @@ export interface ITokenRepository {
   SaveTokens(id: string, publicKey: string, refreshToken: string): Promise<void>;
   ClearToken(id: string): Promise<void>;
   GetPublicKeyFromId(id: string): Promise<string | null>;
+  ClearRefreshTokensUsed(id: string): Promise<void>
 }
 @injectable()
 export class TokenRepository implements ITokenRepository {
@@ -27,6 +28,21 @@ export class TokenRepository implements ITokenRepository {
     @inject(TYPES.Prisma)
     private readonly _db: PrismaClient,
   ) { }
+  async ClearRefreshTokensUsed(id: string): Promise<void> {
+    const execute: string | any[] = [];
+
+    execute.push(
+      this._db.token.update({
+        data: {
+          refreshTokenUsed: [],
+        },
+        where: {
+          userId: id,
+        },
+      }),
+    );
+    await this._db.$transaction(execute);
+  }
   async GetPublicKeyFromId(id: string): Promise<string | null> {
     const { publicKey } = await this._db.token.findUnique({
       where: {
@@ -100,13 +116,13 @@ export class TokenRepository implements ITokenRepository {
       sub: data
     }, privateKey, {
       algorithm: 'RS256',
-      expiresIn: '30s',
+      expiresIn: '30d',
     });
     const refreshToken = jwt.sign({
       sub: data
     }, privateKey, {
       algorithm: 'RS256',
-      expiresIn: '3h',
+      expiresIn: '90d',
     });
     return { accessToken, refreshToken };
   }
