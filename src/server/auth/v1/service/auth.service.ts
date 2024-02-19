@@ -43,7 +43,7 @@ export interface IAuhtService {
   Test(): Promise<any>;
   GetPublicKeyFromUserId(id: string): Promise<string>;
   TestCnt(): Promise<void>
-  HandleCredential(user: StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>): Promise<void>
+  HandleCredential(user: StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>): Promise<{ isFirstLogin: boolean, userId?: string }>
   UpdateStatusLogin(id: string, provider: string): Promise<void>
   DeleteUser(id: string): Promise<void>
   HandleSetupCredential(ssid: string, provider: string, email: string | null): Promise<any>
@@ -348,8 +348,17 @@ export class AuthService implements IAuhtService {
           fullName: fullName,
         },
       });
+      RabbitMQClient.messageProduce("user-queue", {
+        type: "create-user-avatar",
+        payload: {
+          id,
+          avatar: encodeURIComponent(picture),
+          bio: ""
+        }
+      })
       await this._authRepo.CreateOne({ id, createdAt: Date.now().toString(), updatedAt: Date.now().toString() });
       await this._authRepo.AddOauth2(id, "google")
+      return id
     } catch (error) {
       console.log(error)
       throw new WrongCredentials()
@@ -380,8 +389,17 @@ export class AuthService implements IAuhtService {
           fullName,
         },
       });
+      RabbitMQClient.messageProduce("user-queue", {
+        type: "create-user-avatar",
+        payload: {
+          id: userId,
+          avatar: encodeURIComponent(picture),
+          bio: ""
+        }
+      })
       await this._authRepo.CreateOne({ id: userId, createdAt: Date.now().toString(), updatedAt: Date.now().toString() });
       await this._authRepo.AddOauth2(userId, "facebook")
+      return userId
     } catch (error) {
       console.log(error)
       throw new WrongCredentials()
@@ -389,12 +407,11 @@ export class AuthService implements IAuhtService {
   }
   async HandleSigninGithub(dto: { id: string, displayName: string, picture: string }) {
     try {
-      const userId = randomUUID()
       const { id, displayName: fullName, picture } = dto
       RabbitMQClient.messageProduce('user-queue', {
         type: 'add-user-provider',
         payload: {
-          userId,
+          userId: id,
           provider: {
             provider: "github",
             id
@@ -408,15 +425,23 @@ export class AuthService implements IAuhtService {
       RabbitMQClient.messageProduce('chat-queue', {
         type: 'add-user',
         payload: {
-          userId,
+          userId: id,
           fullName,
         },
       });
-      await this._authRepo.CreateOne({ id: userId, createdAt: Date.now().toString(), updatedAt: Date.now().toString() });
-      await this._authRepo.AddOauth2(userId, "github")
+      RabbitMQClient.messageProduce("user-queue", {
+        type: "create-user-avatar",
+        payload: {
+          id,
+          avatar: encodeURIComponent(picture),
+          bio: ""
+        }
+      })
+      await this._authRepo.CreateOne({ id, createdAt: Date.now().toString(), updatedAt: Date.now().toString() });
+      await this._authRepo.AddOauth2(id, "github")
       return {
         isLoginBefore: false,
-        id: userId,
+        id,
         picture,
         fullName,
         userName: fullName,
@@ -427,8 +452,7 @@ export class AuthService implements IAuhtService {
       throw new WrongCredentials()
     }
   }
-  async HandleCredential(user: StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>): Promise<void> {
-    console.log(user.email);
+  async HandleCredential(user: StrictUnion<GoogleUserType | GithubUserType | FacebookUserType>): Promise<{ isFirstLogin: boolean, userId?: string }> {
 
     if (!user.provider) {
       const res = (await RabbitMQClient.clientProduce('user-queue', {
@@ -436,8 +460,11 @@ export class AuthService implements IAuhtService {
         payload: { email: user.email },
       })) as IMessageResponse;
       if (res.code !== 1200) {
-        await this.HandleSigninGoogle({ email: user.email, userName: (user.given_name) as string + " " + (user.family_name as string), fullName: (user.given_name) as string + " " + (user.family_name as string), picture: user.picture })
+        const id = await this.HandleSigninGoogle({ email: user.email, userName: (user.given_name) as string + " " + (user.family_name as string), fullName: (user.given_name) as string + " " + (user.family_name as string), picture: user.picture })
+        return { isFirstLogin: true, userId: id }
       }
+      return { isFirstLogin: false, userId: res.payload["userId"] }
+
     }
     else if (user.provider === "facebook") {
       const res = (await RabbitMQClient.clientProduce('user-queue', {
@@ -445,8 +472,12 @@ export class AuthService implements IAuhtService {
         payload: { provider: user.provider, id: user.id },
       })) as IMessageResponse;
       if (res.code !== 1200) {
-        await this.HandleSigninFacebook({ id: user.id, displayName: user.displayName, picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png" })
+        const userId = await this.HandleSigninFacebook({ id: user.id, displayName: user.displayName, picture: "https://d3lugnp3e3fusw.cloudfront.net/143086968_2856368904622192_1959732218791162458_n.png" })
+        return { isFirstLogin: true, userId }
+
       }
+      return { isFirstLogin: false, userId: res.payload["userId"] }
+
     } else if (user.provider === "github") {
       const res = (await RabbitMQClient.clientProduce('user-queue', {
         type: 'get-user-by-provider',
@@ -454,7 +485,10 @@ export class AuthService implements IAuhtService {
       })) as IMessageResponse;
       if (res.code !== 1200) {
         await this.HandleSigninGithub({ id: user.id, displayName: user.displayName, picture: user.photos[0].value })
+        return { isFirstLogin: true }
       }
+      return { isFirstLogin: false }
+
     }
 
   }

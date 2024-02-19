@@ -164,40 +164,6 @@ export class AuthController {
     await this._service.TestCnt();
     return res.json({ msg: "OK" });
   }
-  // @httpGet("/oauth-request")
-  // async GetUrlOauth(@queryParam("mode") mode: "google" | "facebook" | "github", @response() res: Response) {
-  //   const queriesParams = new URLSearchParams({
-  //     client_id: config["GOOGLE_CLIENT_ID"],
-
-  //     redirect_uri: "http://localhost:5173",
-
-  //     response_type: 'code',
-
-  //     scope: 'openid profile email',
-
-  //     access_type: 'offline',
-
-  //     state: 'standard_oauth',
-
-  //     prompt: 'consent',
-
-  //   }
-  //   )
-  //   const redirectUrl = "http://localhost:80/api/v1/auth/oauth2"
-  //   const oAuth2Client = new OAuth2Client(
-  //     config["GOOGLE_CLIENT_ID"],
-  //     config["GOOGLE_CLIENT_SECRET"],
-  //     redirectUrl,
-  //   )
-  //   const authorizedUrl = oAuth2Client.generateAuthUrl({
-  //     access_type: "offline",
-  //     scope: 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email openid ',
-  //     prompt: "consent"
-  //   })
-  //   return res.json({
-  //     url: authorizedUrl
-  //   })
-  // }
   @httpGet("/oauth-request", passportGoogle.authenticate("google", {
     scope: ["profile", "email"],
     session: false
@@ -210,12 +176,15 @@ export class AuthController {
     // console.log(req["_passport"]["instance"]["_strategies"]["google"])
     const user = req.user as GoogleUserType
 
-    await this._service.HandleCredential(user)
-    const ssid = encrypt(user.sub)
-    res.cookie("_s", ssid, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
-    res.cookie("_avt", user.picture, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
-    res.cookie("_p", "google", { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
-    res.cookie("_e", user.email ?? "", { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
+    const { isFirstLogin, userId } = await this._service.HandleCredential(user)
+    const tokens = await this._service.CreateAndSaveTokens(userId)
+    this.CookieReturn(res, { ...tokens })
+
+    // const ssid = encrypt(user.sub)
+    // res.cookie("_s", ssid, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
+    // res.cookie("_avt", user.picture, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
+    // res.cookie("_p", "google", { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
+    // res.cookie("_e", user.email ?? "", { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
 
     // {
     //   sub: '102323097327899576439',
@@ -227,7 +196,23 @@ export class AuthController {
     //   email_verified: true,
     //   locale: 'vi'
     // }
-    res.redirect(FE_URL + "/setup")
+    if (isFirstLogin) {
+      res.cookie("_sid", userId, {
+        sameSite: "strict",
+        secure: process.env.NODE_ENV === "production",
+        domain: config["COOKIES_DOMAIN"],
+        maxAge: 31 * 24 * 60 * 60 * 1000
+      })
+      res.redirect(FE_URL + "/setup")
+    } else {
+      res.cookie("_sid", userId, {
+        sameSite: "strict",
+        secure: process.env.NODE_ENV === "production",
+        domain: config["COOKIES_DOMAIN"],
+        maxAge: 31 * 24 * 60 * 60 * 1000
+      })
+      res.redirect(FE_URL + "/me")
+    }
   }
 
   @httpGet("/oauth-request-github", passportGithub.authenticate("github", { scope: ['user:email'], session: false }))
@@ -237,38 +222,64 @@ export class AuthController {
   }))
   async OauthGithubCb(@request() req: Request, @response() res: Response) {
     const user = req.user as GithubUserType
-    await this._service.HandleCredential(user)
-    const ssid = encrypt(user.id)
+    const { isFirstLogin } = await this._service.HandleCredential(user)
+    const tokens = await this._service.CreateAndSaveTokens(user.id)
 
+    this.CookieReturn(res, { ...tokens })
+    // res.cookie("_s", ssid, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
+    // res.cookie("_avt", user.photos[0].value, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
+    // res.cookie("_p", "github", { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
 
-    res.cookie("_s", ssid, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
-    res.cookie("_avt", user.photos[0].value, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
-    res.cookie("_p", "github", { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
     // const uri = "name=" + encodeURIComponent(user.displayName) + "&email=" + encodeURIComponent(user.em)
     // console.log((uri));
     // res.cookie("alo", "Hello", { maxAge: 60 * 1000 })
     // res.redirect(config["ORIGIN"] + "/setup?" + uri)
     // console.log(user)
     // await this._service.HandleCredential(user)
-    res.redirect(FE_URL + "/setup")
+    if (isFirstLogin) {
+      res.cookie("_sid", user.id, {
+        sameSite: "strict",
+        secure: process.env.NODE_ENV === "production",
+        domain: config["COOKIES_DOMAIN"],
+        maxAge: 31 * 24 * 60 * 60 * 1000
+      })
+      res.redirect(FE_URL + "/setup")
+    } else {
+      res.cookie("_sid", user.id, {
+        sameSite: "strict",
+        secure: process.env.NODE_ENV === "production",
+        domain: config["COOKIES_DOMAIN"],
+        maxAge: 31 * 24 * 60 * 60 * 1000
+      })
+      res.redirect(FE_URL + "/me")
+    }
   }
   @httpGet("/oauth-request-facebook", passportFacebook.authenticate("facebook", { session: false }))
   async OauthFacebookb() { }
   @httpGet("/oauth2-facebook", passportFacebook.authenticate("facebook", { session: false }))
   async OauthFacebookCb(@request() req: Request, @response() res: Response) {
     const user = req.user as FacebookUserType
-    await this._service.HandleCredential(user)
-    const ssid = encrypt(user.id)
+    const { isFirstLogin, userId } = await this._service.HandleCredential(user)
+    const tokens = await this._service.CreateAndSaveTokens(userId)
+    this.CookieReturn(res, { ...tokens })
 
-    res.cookie("_s", ssid, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
-
-    res.cookie("_avt", FB_AVATAR, { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
-    res.cookie("_p", "facebook", { sameSite: "strict", httpOnly: true, secure: process.env.NODE_ENV === "production", domain: config["COOKIES_DOMAIN"], maxAge: 3 * 60 * 1000 })
-    // const uri = "name=" + encodeURIComponent(user.displayName) + "&email=" + encodeURIComponent(user.em)
-    // console.log((uri));
-    // res.cookie("alo", "Hello", { maxAge: 60 * 1000 })
-    // res.redirect(config["ORIGIN"] + "/setup?" + uri)
-    res.redirect(FE_URL + "/setup")
+    if (isFirstLogin) {
+      res.cookie("_sid", userId, {
+        sameSite: "strict",
+        secure: process.env.NODE_ENV === "production",
+        domain: config["COOKIES_DOMAIN"],
+        maxAge: 31 * 24 * 60 * 60 * 1000
+      })
+      res.redirect(FE_URL + "/setup")
+    } else {
+      res.cookie("_sid", userId, {
+        sameSite: "strict",
+        secure: process.env.NODE_ENV === "production",
+        domain: config["COOKIES_DOMAIN"],
+        maxAge: 31 * 24 * 60 * 60 * 1000
+      })
+      res.redirect(FE_URL + "/me")
+    }
   }
 
   @httpGet("/login/success")
