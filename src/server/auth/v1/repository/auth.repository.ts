@@ -482,7 +482,7 @@ export class AuthRepository implements IAuthRepository {
         option: 'passkey',
       },
     });
-    return passkeys.key as PasskeysValuesType ?? null;
+    return passkeys ? passkeys.key as PasskeysValuesType : null;
   }
   async AddChallenge(userId: string, challenge: string): Promise<any> {
     const execute: string | any[] = [];

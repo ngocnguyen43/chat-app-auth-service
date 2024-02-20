@@ -251,6 +251,7 @@ export class AuthService implements IAuhtService {
     }
     const userId = res.payload['userId'];
     const passkeys = await this._authRepo.FindPasskeys(userId)
+    if (!passkeys) return
     const credentialIDs = passkeys.devices.map(i => {
       return {
         credential: i.credentialID,

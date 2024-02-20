@@ -216,7 +216,7 @@ export class AuthController {
   }
 
   @httpGet("/oauth-request-github", passportGithub.authenticate("github", { scope: ['user:email'], session: false }))
-  async OauthGithub() { }
+  // async OauthGithub() { }
   @httpGet("/oauth2-github", passportGithub.authenticate("github", {
     session: false
   }))
@@ -255,7 +255,6 @@ export class AuthController {
     }
   }
   @httpGet("/oauth-request-facebook", passportFacebook.authenticate("facebook", { session: false }))
-  async OauthFacebookb() { }
   @httpGet("/oauth2-facebook", passportFacebook.authenticate("facebook", { session: false }))
   async OauthFacebookCb(@request() req: Request, @response() res: Response) {
     const user = req.user as FacebookUserType
